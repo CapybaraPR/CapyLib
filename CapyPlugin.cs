@@ -30,7 +30,10 @@ public class CapyPlugin : Plugin<CapyConfig>
         // Создание базовых каталогов
         EnsureDirectories();
 
-        // 1. Инициализация DRM лицензии
+        // 1. Вывод фирменного логотипа Капибары
+        PrintCapybaraLogo();
+
+        // 2. Инициализация DRM лицензии
         string licenseKey = GetOrCreateLicenseKey();
         _ = InitializeWithLicenseAsync(licenseKey);
 
@@ -39,7 +42,6 @@ public class CapyPlugin : Plugin<CapyConfig>
 
     private async Task InitializeWithLicenseAsync(string licenseKey)
     {
-        Log.Info("[CapyLib] Проверка лицензии сервера...");
         bool isValid = await LicenseManager.VerifyAsync(Config.LicenseServerUrl, licenseKey);
 
         if (!isValid)
@@ -52,21 +54,18 @@ public class CapyPlugin : Plugin<CapyConfig>
         // Запуск фонового цикла проверки лицензии
         LicenseManager.StartLicenseLoop(Config.LicenseServerUrl, licenseKey, Config.LicenseCheckIntervalSeconds);
 
-        // 2. Инициализация базы данных
+        // 3. Инициализация базы данных
         InitializeDatabase();
 
-        // 3. Инициализация плейсхолдеров
+        // 4. Инициализация плейсхолдеров
         PlaceholderReplacer.RegisterDefaults();
 
-        // 4. Регистрация аудиоклипов
+        // 5. Регистрация аудиоклипов
         AudioRegistry.RegisterClips();
 
-        // 5. Инициализация и запуск загрузчика модулей
+        // 6. Инициализация и запуск загрузчика модулей
         Loader = new ModuleLoader();
         await Loader.InitializeAsync();
-
-        // 6. Вывод фирменного логотипа Капибары в консоль
-        PrintCapybaraLogo();
     }
 
     private void InitializeDatabase()
@@ -117,8 +116,8 @@ public class CapyPlugin : Plugin<CapyConfig>
             return File.ReadAllText(keyPath).Trim();
         }
 
-        File.WriteAllText(keyPath, "YOUR_LICENSE_KEY_HERE");
-        return "YOUR_LICENSE_KEY_HERE";
+        File.WriteAllText(keyPath, "DEV_LICENSE");
+        return "DEV_LICENSE";
     }
 
     public override void OnDisabled()
@@ -138,20 +137,33 @@ public class CapyPlugin : Plugin<CapyConfig>
         base.OnDisabled();
     }
 
-    private void PrintCapybaraLogo()
+    public void PrintCapybaraLogo()
     {
-        Log.Info("\n" +
-            "===============================================================================\n" +
-            "        (\\_/)\n" +
-            "       ( •_•)    ██████╗  █████╗ ██████╗ ██╗   ██╗██╗     ██╗██████╗\n" +
-            "      / >🍊     ██╔════╝ ██╔══██╗██╔══██╗╚██╗ ██╔╝██║     ██║██╔══██╗\n" +
-            "     /     \\    ██║      ███████║██████╔╝ ╚████╔╝ ██║     ██║██████╔╝\n" +
-            "    (_______)   ██║      ██╔══██║██╔═══╝   ╚██╔╝  ██║     ██║██╔══██╗\n" +
-            "                ╚██████╗ ██║  ██║██║        ██║   ███████╗██║██████╔╝\n" +
-            "                 ╚═════╝ ╚═╝  ╚═╝╚═╝        ╚═╝   ╚══════╝╚═╝╚═════╝\n" +
-            "\n" +
-            $"          [ Capybara Framework & Library v{Version} for SCP:SL EXILED ]\n" +
-            $"                    Licensed to: {LicenseManager.LicenseOwner}\n" +
-            "===============================================================================");
+        string[] logo = new[]
+        {
+            "",
+            "  ____                         _     _ _     ",
+            " / ___|__ _ _ __  _   _       | |   (_) |__  ",
+            "| |   / _` | '_ \\| | | | _____| |   | | '_ \\ ",
+            "| |__| (_| | |_) | |_| ||_____| |___| | |_) |",
+            " \\____\\__,_| .__/ \\__, |      |_____|_|_.__/ ",
+            "           |_|    |___/                      ",
+            "           (\\_/)  [ Capybara Framework v" + Version + " ]",
+            "          ( •_•)  [ License: " + LicenseManager.LicenseOwner + " ]",
+            "         / >🍊    [ Loaded successfully for SCP:SL EXILED ]",
+            ""
+        };
+
+        foreach (var line in logo)
+        {
+            try
+            {
+                Log.SendRaw(line, ConsoleColor.Yellow);
+            }
+            catch
+            {
+                Log.Info(line);
+            }
+        }
     }
 }
