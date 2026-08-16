@@ -14,11 +14,14 @@ public class CapyConfig : IConfig
     [Description("Режим подробного логирования (Debug)")]
     public bool Debug { get; set; } = false;
 
+    [Description("Включить обязательную проверку DRM лицензии")]
+    public bool ValidateLicense { get; set; } = false;
+
     [Description("URL сервера валидации лицензий (DRM)")]
     public string LicenseServerUrl { get; set; } = "http://127.0.0.1:5000";
 
     [Description("Лицензионный ключ сервера (если пусто - читается из license.key)")]
-    public string LicenseKey { get; set; } = string.Empty;
+    public string LicenseKey { get; set; } = "DEV_LICENSE";
 
     [Description("Интервал проверки лицензии в секундах")]
     public float LicenseCheckIntervalSeconds { get; set; } = 300f;

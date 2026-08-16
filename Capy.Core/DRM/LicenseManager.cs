@@ -10,19 +10,28 @@ namespace Capy.Core.DRM;
 /// </summary>
 public static class LicenseManager
 {
-    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(8) };
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static bool _isRunning;
     private static string _licenseKey = string.Empty;
     private static string _serverUrl = string.Empty;
 
-    public static bool IsLicenseValid { get; private set; }
-    public static string LicenseOwner { get; private set; } = "Unknown";
+    public static bool IsLicenseValid { get; private set; } = true;
+    public static string LicenseOwner { get; private set; } = "CapybaraPR (Developer)";
 
     public static async Task<bool> VerifyAsync(string serverUrl, string licenseKey)
     {
         _serverUrl = serverUrl;
         _licenseKey = licenseKey;
+
+        // Если валидация отключена в конфиге или используется ключ разработчика
+        if (CapyPlugin.Instance?.Config.ValidateLicense == false || string.Equals(licenseKey, "DEV_LICENSE", StringComparison.OrdinalIgnoreCase))
+        {
+            IsLicenseValid = true;
+            LicenseOwner = "CapybaraPR (Developer Mode)";
+            Log.Info("[CapyLib:DRM] Лицензия: Режим разработчика (DEV MODE).");
+            return true;
+        }
 
         if (string.IsNullOrWhiteSpace(licenseKey))
         {
@@ -36,7 +45,7 @@ public static class LicenseManager
             var payload = new Dictionary<string, string>
             {
                 { "license_key", licenseKey },
-                { "server_ip", Server.IpAddress },
+                { "server_ip", Server.IpAddress ?? "127.0.0.1" },
                 { "server_port", Server.Port.ToString() }
             };
 
@@ -74,6 +83,8 @@ public static class LicenseManager
 
     public static void StartLicenseLoop(string serverUrl, string licenseKey, float intervalSeconds = 300f)
     {
+        if (CapyPlugin.Instance?.Config.ValidateLicense == false) return;
+
         _isRunning = true;
         _serverUrl = serverUrl;
         _licenseKey = licenseKey;
@@ -114,18 +125,28 @@ public static class LicenseManager
             ModuleManager.DisableAll();
 
             // Кикаем всех игроков с сообщением
-            foreach (var player in Player.List)
+            try
             {
-                player.Kick("Сервер использует нелицензионную копию CapyLib. Обратитесь к администрации.");
+                foreach (var player in Player.List)
+                {
+                    player?.Disconnect("Сервер использует нелицензионную копию CapyLib. Обратитесь к администрации.");
+                }
             }
+            catch { }
 
-            // Форсируем детонацию и старт раунда для сброса состояния
-            Round.Start();
-            Warhead.Detonate();
+            // Безопасный сброс раунда
+            try
+            {
+                if (Round.IsStarted)
+                {
+                    Warhead.Detonate();
+                }
+            }
+            catch { }
         }
         catch (Exception ex)
         {
-            Log.Error($"[CapyLib:DRM] Ошибка при выполнении защиты: {ex}");
+            Log.Error($"[CapyLib:DRM] Ошибка при выполнении защиты: {ex.Message}");
         }
     }
 }
