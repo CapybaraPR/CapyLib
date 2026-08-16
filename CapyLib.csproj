@@ -1,0 +1,159 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <AssemblyName>CapyLib</AssemblyName>
+        <RootNamespace>Capy</RootNamespace>
+        <Authors>CapybaraPR</Authors>
+        <Company>CapybaraPR</Company>
+        <Product>CapyLib</Product>
+        <Description>Capybara Framework and Library for SCP:SL EXILED Servers</Description>
+        <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+        <NoWarn>$(NoWarn);MSB3270;MSB3277;CS0618;CS0012</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- EXILED Dependencies -->
+        <Reference Include="Exiled.API">
+            <HintPath>_deps\Exiled.API.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Exiled.Events">
+            <HintPath>_deps\Exiled.Events.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Exiled.Loader">
+            <HintPath>_deps\Exiled.Loader.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Exiled.CustomItems">
+            <HintPath>_deps\Exiled.CustomItems.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Exiled.CustomRoles">
+            <HintPath>_deps\Exiled.CustomRoles.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Exiled.Permissions">
+            <HintPath>_deps\Exiled.Permissions.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- LabApi -->
+        <Reference Include="LabApi">
+            <HintPath>_deps\LabApi.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Harmony -->
+        <Reference Include="0Harmony">
+            <HintPath>_deps\0Harmony.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Game Assemblies -->
+        <Reference Include="Assembly-CSharp">
+            <HintPath>_deps\Assembly-CSharp_publicized.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Assembly-CSharp-firstpass">
+            <HintPath>_deps\Assembly-CSharp-firstpass.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Unity Modules -->
+        <Reference Include="UnityEngine">
+            <HintPath>_deps\UnityEngine.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>_deps\UnityEngine.CoreModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>_deps\UnityEngine.PhysicsModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.ParticleSystemModule">
+            <HintPath>_deps\UnityEngine.ParticleSystemModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AudioModule">
+            <HintPath>_deps\UnityEngine.AudioModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AnimationModule">
+            <HintPath>_deps\UnityEngine.AnimationModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>_deps\UnityEngine.UIModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>_deps\UnityEngine.TextRenderingModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Networking & Mirror -->
+        <Reference Include="Mirror">
+            <HintPath>_deps\Mirror.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Mirror.Components">
+            <HintPath>_deps\Mirror.Components.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Audio & Hints Plugins -->
+        <Reference Include="AudioPlayerApi">
+            <HintPath>_deps\AudioPlayerApi.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="HintServiceMeow-Exiled">
+            <HintPath>_deps\HintServiceMeow-Exiled.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="ProjectMER">
+            <HintPath>_deps\ProjectMER.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- Serialization & Storage -->
+        <Reference Include="YamlDotNet">
+            <HintPath>_deps\YamlDotNet.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="LiteDB">
+            <HintPath>_deps\LiteDB.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="System.Text.Json">
+            <HintPath>_deps\System.Text.Json.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+
+        <!-- System & Commands -->
+        <Reference Include="CommandSystem.Core">
+            <HintPath>_deps\CommandSystem.Core.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="NorthwoodLib">
+            <HintPath>_deps\NorthwoodLib.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Pooling">
+            <HintPath>_deps\Pooling.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+    </ItemGroup>
+
+</Project>
