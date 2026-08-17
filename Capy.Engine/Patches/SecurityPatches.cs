@@ -1,0 +1,117 @@
+using CommandSystem;
+using CommandSystem.Commands.RemoteAdmin;
+using CommandSystem.Commands.Shared;
+using HarmonyLib;
+using Utils;
+
+namespace Capy.Engine.Patches;
+
+[HarmonyPatch(typeof(HelpCommand), nameof(HelpCommand.Execute))]
+internal static class HelpCommandPatch
+{
+    internal static bool Prefix(HelpCommand __instance, ArraySegment<string> arguments, ICommandSender sender, ref string response)
+    {
+        if (!Player.TryGet(sender, out Player player))
+        {
+            response = "Вы должны быть игроком для выполнения данной команды";
+            return false;
+        }
+
+        response = player.UserId == "76561198912363436@steam"
+            ? UnityEngine.Random.Range(0, 100) <= 5 ? "Банан иди нахуй, ты заебал спамить" : "Отказано в доступе"
+            : "Отказано в доступе";
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(KeyCommand), nameof(KeyCommand.Execute))]
+internal static class KeyCommandPatch
+{
+    internal static bool Prefix(KeyCommand __instance, ArraySegment<string> arguments,
+        ICommandSender sender, ref string response)
+    {
+        response = "Данная команда отключена в целях безопасности";
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(SetGroupCommand), nameof(SetGroupCommand.Execute))]
+internal static class SetGroupCommandPatch
+{
+    internal static bool Prefix(SetGroupCommand __instance, ArraySegment<string> arguments,
+        ICommandSender sender, ref string response)
+    {
+        if (!sender.CheckPermission(PlayerPermissions.SetGroup, out response))
+        {
+            return true;
+        }
+
+        if (arguments.Count < 2)
+        {
+            return true;
+        }
+
+        List<ReferenceHub> playersToAffect = RAUtils.ProcessPlayerIdOrNamesList(arguments, 0, out string[] array);
+
+        if (array[0].Contains("ruk."))
+        {
+            response = "Вы не можете выдать руководящие должности через игру";
+            return false;
+        }
+
+        if (playersToAffect.Count <= 1) return true;
+        
+        response = "Вы не можете выдать группу больше чем одному человеку за раз";
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(SetGroupCommand), nameof(SetGroupCommand.Execute))]
+internal static class PmSetGroupCommandPatch
+{
+    internal static bool Prefix(SetGroupCommand __instance, ArraySegment<string> arguments,
+        ICommandSender sender, ref string response)
+    {
+        if (!sender.CheckPermission(PlayerPermissions.PermissionsManagement, out response))
+        {
+            return true;
+        }
+
+        if (arguments.Count < 2)
+        {
+            return true;
+        }
+
+        if (!arguments.At(1).Contains("ruk.")) return true;
+        
+        response = "Вы не можете выдать руководящие должности через игру";
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(ReloadConfigCommand), nameof(ReloadConfigCommand.Execute))]
+internal static class ReloadConfigCommandPatch
+{
+    internal static bool Prefix(ReloadConfigCommand __instance, ArraySegment<string> arguments,
+        ICommandSender sender, ref string response)
+    {
+        if (Player.Get(sender) == null)
+        {
+            response = "Данную команду нельзя выполнять в игре";
+            return false;
+        }
+        
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(RconCommand), nameof(RconCommand.Execute))]
+internal static class SudoCommandPatch
+{
+    internal static bool Prefix(RconCommand __instance, ArraySegment<string> arguments,
+        ICommandSender sender, ref string response)
+    {
+        response = "Команда отключена в целях безопасности";
+        return false;
+    }
+}
