@@ -673,6 +673,7 @@ public sealed class BridgeApiServer : IDisposable
             {
                 Id = p.Id,
                 Nickname = p.Nickname ?? "Unknown",
+                Name = p.Nickname ?? "Unknown",
                 UserId = _config.IncludePlayerUserIds ? p.UserId : null,
                 Role = p.Role.Type.ToString(),
                 Team = p.Role.Team.ToString(),
@@ -684,9 +685,16 @@ public sealed class BridgeApiServer : IDisposable
             });
         }
 
+        int maxPlayers = 20;
+        try { maxPlayers = Server.MaxPlayerCount; } catch { }
+
         return new PlayersResponse
         {
+            Success = true,
+            Online = list.Count,
             Count = list.Count,
+            Maximum = maxPlayers,
+            MaxPlayers = maxPlayers,
             Players = list
         };
     }

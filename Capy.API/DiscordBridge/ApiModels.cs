@@ -235,6 +235,9 @@ public sealed class PlayerItem
     [JsonPropertyName("nickname")]
     public string Nickname { get; set; } = string.Empty;
 
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
     [JsonPropertyName("user_id")]
     public string? UserId { get; set; }
 
@@ -262,8 +265,20 @@ public sealed class PlayerItem
 
 public sealed class PlayersResponse
 {
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("online")]
+    public int Online { get; set; }
+
     [JsonPropertyName("count")]
     public int Count { get; set; }
+
+    [JsonPropertyName("maximum")]
+    public int Maximum { get; set; }
+
+    [JsonPropertyName("max_players")]
+    public int MaxPlayers { get; set; }
 
     [JsonPropertyName("players")]
     public List<PlayerItem> Players { get; set; } = new();
