@@ -547,39 +547,99 @@ public sealed class BridgeApiServer : IDisposable
         int humans = 0;
         int spectators = 0;
 
-        foreach (Player p in Player.List)
+        try
         {
-            if (p == null || !p.IsConnected || p.IsHost) continue;
-            if (p.IsDead || p.Role.Team == PlayerRoles.Team.Dead)
-                spectators++;
-            else if (p.Role.Team == PlayerRoles.Team.SCPs)
-                scps++;
-            else
-                humans++;
+            foreach (Player p in Player.List)
+            {
+                if (p == null || !p.IsConnected || p.IsHost) continue;
+                if (p.Role == null) continue;
+
+                if (p.IsDead || p.Role.Team == PlayerRoles.Team.Dead)
+                    spectators++;
+                else if (p.Role.Team == PlayerRoles.Team.SCPs)
+                    scps++;
+                else
+                    humans++;
+            }
+        }
+        catch
+        {
         }
 
-        string sName = Server.Name ?? "SCP: SL Server";
-        sName = HiddenServerMetadata.Replace(sName, string.Empty);
-        sName = RichTextTag.Replace(sName, string.Empty).Trim();
+        string sName = "SCP: SL Server";
+        try
+        {
+            sName = Server.Name ?? "SCP: SL Server";
+            sName = HiddenServerMetadata.Replace(sName, string.Empty);
+            sName = RichTextTag.Replace(sName, string.Empty).Trim();
+        }
+        catch
+        {
+        }
+
+        string serverIp = "127.0.0.1";
+        ushort serverPort = 7777;
+        try { serverPort = Exiled.API.Features.Server.Port; } catch { }
+        try { serverIp = Exiled.API.Features.Server.IpAddress ?? "127.0.0.1"; } catch { }
+
+        int onlineCount = 0;
+        try { onlineCount = Player.List.Count(p => p != null && p.IsConnected && !p.IsHost); } catch { }
+
+        int maxPlayers = 20;
+        try { maxPlayers = Server.MaxPlayerCount; } catch { }
+
+        bool isRoundRunning = false;
+        bool isRoundStarted = false;
+        bool isRoundEnded = false;
+        bool isWaiting = true;
+        int durationSec = 0;
+        try
+        {
+            isRoundStarted = Round.IsStarted;
+            isRoundEnded = Round.IsEnded;
+            isRoundRunning = isRoundStarted && !isRoundEnded;
+            isWaiting = Round.IsLobby;
+            durationSec = (int)Round.ElapsedTime.TotalSeconds;
+        }
+        catch
+        {
+        }
+
+        bool warheadDet = false;
+        bool warheadProg = false;
+        try
+        {
+            warheadDet = Warhead.IsDetonated;
+            warheadProg = Warhead.IsInProgress;
+        }
+        catch
+        {
+        }
+
+        double tps = 60.0;
+        try { tps = Server.Tps; } catch { }
+
+        bool friendlyFire = false;
+        try { friendlyFire = Server.FriendlyFire; } catch { }
 
         return new StatusResponse
         {
             Server = new ServerStatus
             {
-                ServerName = sName,
-                PublicAddress = _config.ServerAddress ?? $"{Server.IpAddress}:{Server.Port}",
-                Port = (ushort)Server.Port,
-                PlayersCount = Player.List.Count(p => p != null && p.IsConnected && !p.IsHost),
-                MaxPlayers = Server.MaxPlayerCount,
-                IsRoundRunning = Round.IsStarted && !Round.IsEnded,
-                IsRoundStarted = Round.IsStarted,
-                IsRoundEnded = Round.IsEnded,
-                IsWaitingForPlayers = Round.IsLobby,
-                IsWarheadDetonated = Warhead.IsDetonated,
-                IsWarheadInProgress = Warhead.IsInProgress,
-                IsFriendlyFireEnabled = Server.FriendlyFire,
-                RoundDurationSeconds = (int)Round.ElapsedTime.TotalSeconds,
-                Tps = Server.Tps
+                ServerName = string.IsNullOrWhiteSpace(sName) ? "SCP: SL Server" : sName,
+                PublicAddress = !string.IsNullOrWhiteSpace(_config.ServerAddress) ? _config.ServerAddress : $"{serverIp}:{serverPort}",
+                Port = serverPort,
+                PlayersCount = onlineCount,
+                MaxPlayers = maxPlayers,
+                IsRoundRunning = isRoundRunning,
+                IsRoundStarted = isRoundStarted,
+                IsRoundEnded = isRoundEnded,
+                IsWaitingForPlayers = isWaiting,
+                IsWarheadDetonated = warheadDet,
+                IsWarheadInProgress = warheadProg,
+                IsFriendlyFireEnabled = friendlyFire,
+                RoundDurationSeconds = Math.Max(0, durationSec),
+                Tps = tps
             },
             ScpsAlive = scps,
             HumansAlive = humans,
