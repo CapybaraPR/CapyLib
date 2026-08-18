@@ -669,6 +669,15 @@ public sealed class BridgeApiServer : IDisposable
         {
             if (p == null || !p.IsConnected || p.IsHost) continue;
 
+            string group = string.Empty;
+            string rank = string.Empty;
+            string rankColor = string.Empty;
+            string customInfo = string.Empty;
+            try { group = p.GroupName ?? string.Empty; } catch { }
+            try { rank = p.RankName ?? string.Empty; } catch { }
+            try { rankColor = p.RankColor ?? string.Empty; } catch { }
+            try { customInfo = p.CustomInfo ?? string.Empty; } catch { }
+
             list.Add(new PlayerItem
             {
                 Id = p.Id,
@@ -680,7 +689,10 @@ public sealed class BridgeApiServer : IDisposable
                 IsAlive = p.IsAlive,
                 IsCuffed = p.IsCuffed,
                 IsGodmode = p.IsGodModeEnabled,
-                Group = p.GroupName,
+                Group = group,
+                Rank = !string.IsNullOrWhiteSpace(rank) ? rank : group,
+                RankColor = rankColor,
+                CustomInfo = customInfo,
                 Ping = (int)p.Ping
             });
         }

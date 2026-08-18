@@ -259,6 +259,15 @@ public sealed class PlayerItem
     [JsonPropertyName("group")]
     public string? Group { get; set; }
 
+    [JsonPropertyName("rank")]
+    public string? Rank { get; set; }
+
+    [JsonPropertyName("rank_color")]
+    public string? RankColor { get; set; }
+
+    [JsonPropertyName("custom_info")]
+    public string? CustomInfo { get; set; }
+
     [JsonPropertyName("ping")]
     public int Ping { get; set; }
 }
