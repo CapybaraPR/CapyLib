@@ -13,7 +13,7 @@
         <Product>CapyLib</Product>
         <Description>Capybara Framework and Library for SCP:SL EXILED Servers</Description>
         <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
-        <NoWarn>$(NoWarn);MSB3270;MSB3277;CS0618;CS0012</NoWarn>
+        <NoWarn>$(NoWarn);MSB3270;MSB3277;CS0618;CS0012;CS1705</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -132,10 +132,7 @@
             <HintPath>_deps\LiteDB.dll</HintPath>
             <Private>False</Private>
         </Reference>
-        <Reference Include="System.Text.Json">
-            <HintPath>_deps\System.Text.Json.dll</HintPath>
-            <Private>False</Private>
-        </Reference>
+
 
         <!-- System & Commands -->
         <Reference Include="CommandSystem.Core">
@@ -153,6 +150,8 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.2" />
+        <PackageReference Include="System.Text.Json" Version="9.0.2" />
         <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
     </ItemGroup>
 
