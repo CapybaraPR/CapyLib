@@ -187,6 +187,33 @@ public sealed class ServerStatus
 
 public sealed class StatusResponse
 {
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("online")]
+    public int Online { get; set; }
+
+    [JsonPropertyName("maximum")]
+    public int Maximum { get; set; }
+
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = string.Empty;
+
+    [JsonPropertyName("server_name")]
+    public string ServerName { get; set; } = string.Empty;
+
+    [JsonPropertyName("round_state")]
+    public string RoundState { get; set; } = "lobby";
+
+    [JsonPropertyName("round_time")]
+    public string RoundTime { get; set; } = "00:00";
+
+    [JsonPropertyName("tps")]
+    public double Tps { get; set; } = 60.0;
+
+    [JsonPropertyName("utc")]
+    public string Utc { get; set; } = string.Empty;
+
     [JsonPropertyName("server")]
     public ServerStatus Server { get; set; } = new();
 

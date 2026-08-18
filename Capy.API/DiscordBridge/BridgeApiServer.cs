@@ -622,25 +622,40 @@ public sealed class BridgeApiServer : IDisposable
         bool friendlyFire = false;
         try { friendlyFire = Server.FriendlyFire; } catch { }
 
+        string roundState = isWaiting ? "lobby" : (isRoundRunning ? "in_progress" : "ended");
+        string roundTime = $"{durationSec / 60:D2}:{durationSec % 60:D2}";
+        string address = !string.IsNullOrWhiteSpace(_config.ServerAddress) ? _config.ServerAddress : $"{serverIp}:{serverPort}";
+
+        var srvStatus = new ServerStatus
+        {
+            ServerName = string.IsNullOrWhiteSpace(sName) ? "SCP: SL Server" : sName,
+            PublicAddress = address,
+            Port = serverPort,
+            PlayersCount = onlineCount,
+            MaxPlayers = maxPlayers,
+            IsRoundRunning = isRoundRunning,
+            IsRoundStarted = isRoundStarted,
+            IsRoundEnded = isRoundEnded,
+            IsWaitingForPlayers = isWaiting,
+            IsWarheadDetonated = warheadDet,
+            IsWarheadInProgress = warheadProg,
+            IsFriendlyFireEnabled = friendlyFire,
+            RoundDurationSeconds = Math.Max(0, durationSec),
+            Tps = tps
+        };
+
         return new StatusResponse
         {
-            Server = new ServerStatus
-            {
-                ServerName = string.IsNullOrWhiteSpace(sName) ? "SCP: SL Server" : sName,
-                PublicAddress = !string.IsNullOrWhiteSpace(_config.ServerAddress) ? _config.ServerAddress : $"{serverIp}:{serverPort}",
-                Port = serverPort,
-                PlayersCount = onlineCount,
-                MaxPlayers = maxPlayers,
-                IsRoundRunning = isRoundRunning,
-                IsRoundStarted = isRoundStarted,
-                IsRoundEnded = isRoundEnded,
-                IsWaitingForPlayers = isWaiting,
-                IsWarheadDetonated = warheadDet,
-                IsWarheadInProgress = warheadProg,
-                IsFriendlyFireEnabled = friendlyFire,
-                RoundDurationSeconds = Math.Max(0, durationSec),
-                Tps = tps
-            },
+            Success = true,
+            Online = onlineCount,
+            Maximum = maxPlayers,
+            Address = address,
+            ServerName = srvStatus.ServerName,
+            RoundState = roundState,
+            RoundTime = roundTime,
+            Tps = tps,
+            Utc = DateTime.UtcNow.ToString("o"),
+            Server = srvStatus,
             ScpsAlive = scps,
             HumansAlive = humans,
             SpectatorsCount = spectators
