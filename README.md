@@ -26,6 +26,24 @@
 
 ---
 
+## 📚 Документация подсистем
+
+Для каждой подсистемы CapyLib создана отдельная подробная документация:
+
+| Подсистема | Назначение и ссылка |
+| :--- | :--- |
+| 🧠 [**`Capy.Core`**](./Capy.Core/README.md) | Архитектура ядра, модульный загрузчик DAG, IoC-контейнер, DRM и базы данных. |
+| 🌐 [**`Capy.API`**](./Capy.API/README.md) | Сетевой слой, внешние REST-интеграции, статистика и вебхуки. |
+| 🛡️ [**`Capy.API.DiscordBridge`**](./Capy.API/DiscordBridge/README.md) | Защищенный Discord-мост по SSH RSA ключам, логирование и синхронизация ролей. |
+| ⚙️ [**`Capy.Engine`**](./Capy.Engine/README.md) | Игровой движок и механики SCP:SL. |
+| 🔮 [**`Capy.Engine.FakeSync`**](./Capy.Engine/FakeSync/README.md) | Сетевая подмена Mirror HLAPI (SyncVar, SyncList, FakeRpc, AdminToy). |
+| 🎒 [**`Capy.Engine.CustomItems`**](./Capy.Engine/CustomItems/README.md) | Фреймворк создания и трекинга кастомных предметов и оружия. |
+| 🎭 [**`Capy.Engine.CustomRoles`**](./Capy.Engine/CustomRoles/README.md) | Фреймворк создания кастомных ролей, способностей и фракций. |
+| 💬 [**`Capy.Engine.Hints`**](./Capy.Engine/Hints/README.md) | Движок экранных подсказок, многослойный HUD и форматирование. |
+| 🔊 [**`Capy.Engine.Audio`**](./Capy.Engine/Audio/README.md) | Автозагрузка аудиофайлов `.ogg`, пространственный 3D-звук и AudioToggle. |
+
+---
+
 ## 🏛️ Архитектура и функционал
 
 ### 1. ⚙️ `Capy.Core` — Фундамент и утилиты
