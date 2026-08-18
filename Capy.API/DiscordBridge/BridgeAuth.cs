@@ -47,15 +47,6 @@ public sealed class BridgeAuth : IDisposable
                         Log.Warn($"[DiscordBridge.BridgeAuth] Не удалось прочитать файл публичного SSH ключа '{fullPath}': {ex.Message}");
                     }
                 }
-                else if (_config.RequireSshSignature)
-                {
-                    // Auto-generate keypair on first run if configured to require SSH signatures and no key exists
-                    AutoGenerateKeyPair(configDir, keyFile);
-                    if (File.Exists(fullPath))
-                    {
-                        keyText = File.ReadAllText(fullPath, Encoding.UTF8).Trim();
-                    }
-                }
             }
 
             if (!string.IsNullOrWhiteSpace(keyText))
@@ -417,39 +408,6 @@ public sealed class BridgeAuth : IDisposable
             if (match) return i;
         }
         return -1;
-    }
-
-    private static void AutoGenerateKeyPair(string configDir, string keyFileName)
-    {
-        try
-        {
-            using var rsa = new RSACryptoServiceProvider(2048);
-            var rsaParams = rsa.ExportParameters(false);
-
-            byte[] openSshBytes = EncodeOpenSshPublicKey(rsaParams);
-            string sshPubString = "ssh-rsa " + Convert.ToBase64String(openSshBytes) + " capy-discord-bot";
-
-            string pubPath = Path.IsPathRooted(keyFileName) ? keyFileName : Path.Combine(configDir, keyFileName);
-            if (!Directory.Exists(configDir))
-                Directory.CreateDirectory(configDir);
-
-            File.WriteAllText(pubPath, sshPubString + Environment.NewLine, Encoding.UTF8);
-
-            string privPath = Path.Combine(configDir, "aspect_bridge.key");
-            if (!File.Exists(privPath))
-            {
-                string xmlKey = rsa.ToXmlString(true);
-                File.WriteAllText(privPath, xmlKey, Encoding.UTF8);
-            }
-
-            Log.Info($"[DiscordBridge.BridgeAuth] Автоматически создана ключевая пара SSH RSA:");
-            Log.Info($"[DiscordBridge.BridgeAuth] Публичный ключ: {pubPath}");
-            Log.Info($"[DiscordBridge.BridgeAuth] Приватный ключ для бота: {privPath}");
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"[DiscordBridge.BridgeAuth] Не удалось автоматически создать ключи: {ex.Message}");
-        }
     }
 
     public static byte[] EncodeOpenSshPublicKey(RSAParameters rsaParams)
