@@ -353,7 +353,8 @@ public enum BridgeLogCategory
     Rounds,
     Server,
     Commands,
-    Reports
+    Reports,
+    Security
 }
 
 public sealed class BridgeLogField

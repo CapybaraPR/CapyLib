@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -161,10 +162,28 @@ public sealed class BridgeApiServer : IDisposable
 
         try
         {
-            IPAddress? clientIp = context.Request.RemoteEndPoint?.Address;
-            if (!IsIpAllowed(clientIp))
+            IPAddress? clientIpAddress = context.Request.RemoteEndPoint?.Address;
+            string remoteEndpoint = context.Request.RemoteEndPoint?.ToString() ?? "unknown";
+            if (!IsIpAllowed(clientIpAddress))
             {
-                Log.Warn($"[DiscordBridge.ApiServer] Отклонен запрос с неразрешенного IP: {clientIp}");
+                Log.Warn($"[DiscordBridge.ApiServer] Отклонен запрос с неразрешенного IP: {remoteEndpoint}");
+
+                string ua = context.Request.UserAgent ?? "None";
+                _eventStore.Append(
+                    BridgeLogCategory.Security,
+                    "ip_blocked",
+                    "🚨 Блокировка доступа по IP",
+                    $"Зафиксирована попытка обращения к API с неразрешённого IP-адреса.",
+                    "danger",
+                    new List<BridgeLogField>
+                    {
+                        new BridgeLogField { Name = "IP-адрес и порт", Value = $"`{remoteEndpoint}`", Inline = true },
+                        new BridgeLogField { Name = "HTTP Метод", Value = $"`{context.Request.HttpMethod}`", Inline = true },
+                        new BridgeLogField { Name = "User-Agent", Value = $"`{ua}`", Inline = true },
+                        new BridgeLogField { Name = "Запрос", Value = $"`{context.Request.Url?.PathAndQuery ?? "/"}`", Inline = false },
+                        new BridgeLogField { Name = "Причина", Value = "IP-адрес отсутствует в белом списке разрешённых.", Inline = false }
+                    });
+
                 await RespondJsonAsync(context.Response, HttpStatusCode.Forbidden, new ErrorResponse { Error = "IP адрес клиента не входит в список разрешенных." }).ConfigureAwait(false);
                 return;
             }
@@ -197,8 +216,32 @@ public sealed class BridgeApiServer : IDisposable
 
             if (!_auth.ValidateRequest(method, pathAndQuery, bodyBytes, sigHeader, tsHeader, keyHeader, out string authError))
             {
-                if (_config.DebugMode)
-                    Log.Debug($"[DiscordBridge.ApiServer] Ошибка аутентификации: {authError} (Method: {method}, Path: {pathAndQuery})");
+                Log.Warn($"[DiscordBridge.ApiServer] Ошибка аутентификации API ({remoteEndpoint}): {authError} (Method: {method}, Path: {pathAndQuery})");
+
+                string ua = context.Request.UserAgent ?? "None";
+                string keyId = context.Request.Headers["X-Aspect-Key-Id"] ?? "Не указан";
+                string bodyPreview = bodyBytes.Length == 0
+                    ? "Пусто"
+                    : (bodyBytes.Length > 400 ? Encoding.UTF8.GetString(bodyBytes, 0, 400) + "… (обрезано)" : Encoding.UTF8.GetString(bodyBytes));
+
+                _eventStore.Append(
+                    BridgeLogCategory.Security,
+                    "auth_failed",
+                    "🚨 Ошибка аутентификации / подписи API",
+                    $"Зафиксирована попытка несанкционированного доступа: **{authError}**",
+                    "danger",
+                    new List<BridgeLogField>
+                    {
+                        new BridgeLogField { Name = "IP-адрес и порт", Value = $"`{remoteEndpoint}`", Inline = true },
+                        new BridgeLogField { Name = "HTTP Метод", Value = $"`{method}`", Inline = true },
+                        new BridgeLogField { Name = "Key ID", Value = $"`{keyId}`", Inline = true },
+                        new BridgeLogField { Name = "Запрос", Value = $"`{pathAndQuery}`", Inline = false },
+                        new BridgeLogField { Name = "Подпись X-Aspect-Signature", Value = string.IsNullOrEmpty(sigHeader) ? "*Отсутствует*" : $"`{sigHeader.Substring(0, Math.Min(32, sigHeader.Length))}...`", Inline = true },
+                        new BridgeLogField { Name = "Timestamp", Value = string.IsNullOrEmpty(tsHeader) ? "*Отсутствует*" : $"`{tsHeader}`", Inline = true },
+                        new BridgeLogField { Name = "User-Agent", Value = $"`{ua}`", Inline = false },
+                        new BridgeLogField { Name = "Тело запроса (Payload)", Value = $"```json\n{bodyPreview}\n```", Inline = false },
+                        new BridgeLogField { Name = "Причина отклонения", Value = $"❌ {authError}", Inline = false }
+                    });
 
                 await RespondJsonAsync(context.Response, HttpStatusCode.Unauthorized, new ErrorResponse { Error = authError }).ConfigureAwait(false);
                 return;
