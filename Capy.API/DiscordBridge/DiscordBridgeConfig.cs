@@ -15,6 +15,20 @@ public sealed class DiscordBridgeConfig : IModuleConfig
     [Description("HTTP-префикс API. Для бота на том же сервере оставьте loopback.")]
     public string ListenPrefix { get; set; } = "http://127.0.0.1:8123/";
 
+    public DiscordBridgeConfig()
+    {
+        try
+        {
+            if (Exiled.API.Features.Server.Port == 7778)
+            {
+                ListenPrefix = "http://127.0.0.1:8124/";
+            }
+        }
+        catch
+        {
+        }
+    }
+
     [Description("Требовать цифровую подпись запросов по SSH / RSA ключу (строгая криптографическая аутентификация).")]
     public bool RequireSshSignature { get; set; } = true;
 

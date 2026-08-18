@@ -18,7 +18,7 @@ public static class ConfigLoader
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .Build();
 
-    public static string ConfigDirectory => Path.Combine(Paths.Plugins, "CapyLib", "Configs");
+    public static string ConfigDirectory => Path.Combine(Paths.Configs, "CapyLib");
 
     private static void EnsureDirectoryExists()
     {
@@ -28,13 +28,50 @@ public static class ConfigLoader
         }
     }
 
+    private static string GetConfigFilePath(string moduleName)
+    {
+        try
+        {
+            ushort port = Exiled.API.Features.Server.Port;
+            if (port > 0)
+            {
+                string portSpecific = Path.Combine(ConfigDirectory, $"{moduleName}_{port}.yml");
+                if (File.Exists(portSpecific))
+                    return portSpecific;
+            }
+        }
+        catch
+        {
+        }
+
+        string standard = Path.Combine(ConfigDirectory, $"{moduleName}.yml");
+        if (File.Exists(standard))
+            return standard;
+
+        string legacy = Path.Combine(Paths.Plugins, "CapyLib", "Configs", $"{moduleName}.yml");
+        if (File.Exists(legacy))
+            return legacy;
+
+        try
+        {
+            ushort port = Exiled.API.Features.Server.Port;
+            if (port > 0)
+                return Path.Combine(ConfigDirectory, $"{moduleName}_{port}.yml");
+        }
+        catch
+        {
+        }
+
+        return standard;
+    }
+
     public static void ProcessConfig(ICapyModule module)
     {
         if (module == null) return;
         EnsureDirectoryExists();
 
         var configType = module.GetConfigType();
-        var filePath = Path.Combine(ConfigDirectory, $"{module.Name}.yml");
+        var filePath = GetConfigFilePath(module.Name);
 
         try
         {
@@ -73,7 +110,7 @@ public static class ConfigLoader
         if (module == null || config == null) return;
         EnsureDirectoryExists();
 
-        var filePath = Path.Combine(ConfigDirectory, $"{module.Name}.yml");
+        var filePath = GetConfigFilePath(module.Name);
         try
         {
             var yaml = Serializer.Serialize(config);
