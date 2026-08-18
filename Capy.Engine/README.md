@@ -1,32 +1,156 @@
 # ⚙️ Capy.Engine — Игровой движок и механики SCP:SL
 
-`Capy.Engine` — комплекс игровых механик, сетевой синхронизации, физических эффектов, кастомного контента и графического интерфейса для серверов **CapyLib**.
+`Capy.Engine` — комплекс игровых механик, низкоуровневой сетевой синхронизации, физических эффектов, кастомного контента (предметы, оружие, роли, фракции), пространственного звука и графического интерфейса для серверов **CapyLib**.
 
 ---
 
-## 🗂️ Архитектура подсистем
+## 📁 Структура `Capy.Engine`
 
-```mermaid
-graph TD
-    Engine[Capy.Engine] --> FakeSync[FakeSync: Mirror HLAPI Network Illusion]
-    Engine --> CustomItems[CustomItems: Weapons, Grenades, Usables]
-    Engine --> CustomRoles[CustomRoles: Serpents Hand & Custom Teams]
-    Engine --> Hints[Hints & HUD Engine]
-    Engine --> Audio[Audio & Sound Spatialization]
-    Engine --> Patches[Harmony Bytecode Patches]
-    Engine --> ServerSpecific[Server Specific Modes: NR / MediumRP]
+```
+Capy.Engine/
+├── Audio/          # Аудио-система: автозагрузка .ogg файлов и 3D-звук (AudioToggle)
+├── CustomItems/    # Фреймворк кастомных предметов, оружия и спавн-менеджер
+├── CustomRoles/    # Фреймворк кастомных ролей, способностей и фракций (Длань Змеи)
+├── DevTools/       # Инструменты для отладки и тестирования на сервере
+├── Effects/        # Визуальные эффекты (ItemGlowSystem — свечение предметов)
+├── FakeSync/       # Сетевая подмена Mirror HLAPI (SyncVar, SyncList, FakeRpc, AdminToy)
+├── Hints/          # Движок подсказок и многослойный экранный интерфейс (HUD)
+├── Hud/            # Компоненты отрисовки интерфейса
+├── MediumRP/       # Специфичные механики режима MediumRP (CapyMediumRPPlugin)
+├── Modules/        # Движковые модули и контроллеры
+├── NoRules/        # Специфичные механики режима NoRules (CapyNoRulesPlugin)
+├── Patches/        # Низкоуровневые Harmony-патчи игрового байт-кода
+└── ServerSpecific/ # Профили и настройки под конкретные типы серверов
 ```
 
 ---
 
-## 🧩 Подсистемы
+## 🛠️ Примеры использования
 
-| Директория | Назначение |
-| :--- | :--- |
-| **[`FakeSync/`](./FakeSync/README.md)** | Сетевая иллюзия Mirror/HLAPI: подмена `SyncVar`, `SyncList`, Fake RPC и фейковые примитивы AdminToy для индивидуальных игроков. |
-| **[`CustomItems/`](./CustomItems/README.md)** | Фреймворк создания предметов с кастомным поведением, свойствами выстрела, визуалом и логикой. |
-| **[`CustomRoles/`](./CustomRoles/README.md)** | Фреймворк создания ролей, фракций (Длань Змеи и др.), кастомных способностей и условий победы. |
-| **[`Hints/`](./Hints/README.md)** | Продвинутая система отображения подсказок и HUD на экране с поддержкой приоритетов и плейсхолдеров. |
-| **[`Audio/`](./Audio/README.md)** | Подсистема проигрывания кастомных звуковых файлов, музыки и голосовых оповещений через `AudioPlayerApi`. |
-| **`Patches/`** | Низкоуровневые Harmony-патчи игровых методов для расширения возможностей базовой игры. |
-| **`MediumRP/` & `NoRules/`** | Специфичные модули игровых режимов для серверов MediumRP и NoRules (NR). |
+### 1. Сетевая иллюзия Mirror (`FakeSync`)
+
+Позволяет отправлять персональные сетевые пакеты клиентам, изменяя отображение мира, ролей и объектов без изменения состояния сервера для остальных игроков:
+
+```csharp
+using Capy.Engine.FakeSync;
+using UnityEngine;
+
+// 1. Подмена роли цели для конкретного наблюдателя (маскировка)
+observerPlayer.SendFakeSyncVar(targetPlayer.NetworkIdentity, targetRoleSync, writer =>
+{
+    writer.WriteRoleType(RoleTypeId.Scientist);
+});
+
+// 2. Создание фейкового AdminToy примитива (виден только одному игроку)
+player.SendFakePrimitive(
+    primitiveType: PrimitiveType.Cube,
+    position: player.Position + Vector3.forward * 2f,
+    rotation: Quaternion.identity,
+    scale: new Vector3(0.5f, 2f, 0.5f),
+    color: Color.red
+);
+```
+
+---
+
+### 2. Создание кастомного предмета (`CustomItems`)
+
+Наследуйтесь от `Capy.Engine.CustomItems.Base.CustomItem` для добавления уникального оружия или артефакта:
+
+```csharp
+using Capy.Engine.CustomItems.Base;
+using Capy.Engine.CustomItems.Models;
+using Exiled.API.Features.Items;
+using UnityEngine;
+
+public sealed class Medigun : CustomItem
+{
+    public override string Name => "Medigun";
+    public override string Description => "Исцеляет союзников при выстреле.";
+    public override ItemType BaseType => ItemType.GunCOM15;
+    public override ItemRarity Rarity => ItemRarity.Rare;
+    public override string ColorHex => "#00FF88";
+
+    public override void OnShot(Player player, Item item)
+    {
+        if (Physics.Raycast(player.CameraTransform.position, player.CameraTransform.forward, out var hit, 25f))
+        {
+            var target = Player.Get(hit.collider);
+            if (target != null && target != player && target.IsHuman)
+            {
+                target.Heal(20f);
+                target.ShowHint("<color=#00FF88>Вы исцелены выстрелом из Medigun!</color>", 2f);
+            }
+        }
+    }
+}
+```
+
+---
+
+### 3. Создание кастомной роли (`CustomRoles`)
+
+Наследуйтесь от `Capy.Engine.CustomRoles.Base.CustomRole` для создания уникального класса:
+
+```csharp
+using Capy.Engine.CustomRoles.Base;
+using Exiled.API.Enums;
+using PlayerRoles;
+
+public sealed class JuggernautRole : CustomRole
+{
+    public override string Name => "Джаггернаут Хаоса";
+    public override string Description => "Тяжелобронированный боец с повышенным здоровьем и щитом.";
+    public override RoleTypeId BaseRole => RoleTypeId.ChaosMarauder;
+
+    public override float MaxHealth { get; set; } = 350f;
+    public override float HumeShield { get; set; } = 150f;
+
+    public override List<ItemType> StartingItems { get; set; } = new()
+    {
+        ItemType.GunLogicer,
+        ItemType.ArmorHeavy,
+        ItemType.Medkit,
+        ItemType.GrenadeHE
+    };
+
+    public override void OnAssigned(Player player)
+    {
+        base.OnAssigned(player);
+        player.ShowHint($"<color=#FFA500><b>{Name}</b></color>\n{Description}", 8f);
+    }
+}
+```
+
+---
+
+### 4. Воспроизведение звука (`AudioToggle`)
+
+Автоматическая загрузка `.ogg` файлов из `Plugins/CapyLib/Audio/` и управление воспроизведением:
+
+```csharp
+using Capy.Engine.Audio;
+
+// Глобальная музыка конца раунда
+AudioToggle.CreateGlobal("round_end_theme", volume: 0.8f);
+
+// 3D-звук, привязанный к позиции игрока
+AudioToggle.CreateForPlayer(player, "siren", min: 2f, max: 20f, volume: 1f);
+
+// Остановка воспроизведения
+AudioToggle.StopGlobal();
+```
+
+---
+
+### 5. Экранные подсказки и HUD (`Hints`)
+
+```csharp
+using Capy.Engine.Hints;
+
+// Отображение форматированной подсказки
+player.ShowCapyHint(
+    "<size=28><color=#FFA500>Внимание:</color></size> До прибытия подкрепления осталось <b>30</b> секунд.",
+    duration: 5f
+);
+```

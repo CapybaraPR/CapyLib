@@ -1,88 +1,138 @@
-# 🧠 Capy.Core — Ядро и архитектурная основа CapyLib
+# 🧠 Capy.Core — Ядро и архитектурная основа фреймворка
 
-`Capy.Core` — фундаментальный модуль и архитектурный каркас библиотеки **CapyLib**, предоставляющий высокопроизводительные сервисы, управление жизненным циклом компонентов, доступ к базам данных, систему защиты (DRM) и встроенный контейнер внедрения зависимостей (DI/IoC).
+`Capy.Core` — фундаментальный уровень библиотеки **CapyLib**, предоставляющий управление жизненным циклом компонентов, доступ к базам данных, систему лицензирования (DRM), контейнер зависимостей (DI/IoC), типизированную шину событий, расширения стандартных классов SCP:SL/Unity и вспомогательные сервисы.
 
 ---
 
-## 🏛️ Архитектура компонентов
+## 📁 Структура `Capy.Core`
 
-```mermaid
-graph TD
-    CapyPlugin[CapyPlugin.OnEnabled] --> ModuleLoader[ModuleLoader: TopoSort & DI]
-    ModuleLoader --> CoreModules[Core Services]
-    CoreModules --> DRM[DRM & LicenseManager]
-    CoreModules --> DB[Database Provider: LiteDB / MongoDB]
-    CoreModules --> EventBus[EventBus & Messages]
-    CoreModules --> ServiceContainer[ServiceContainer: IoC]
-    ModuleLoader --> EngineModules[Capy.Engine Modules]
-    ModuleLoader --> ApiModules[Capy.API Modules]
+```
+Capy.Core/
+├── API/            # Базовые классы (BaseModule<TConfig>, ICapyModule, IModuleConfig)
+│   └── Attributes/ # Атрибуты зависимостей ([DependsOn])
+├── Database/       # Провайдеры БД (LiteDB, MongoDB, InMemory) и модели данных
+├── DRM/            # Менеджер лицензий (HWID, проверка RSA-подписи, анти-тампер)
+├── Enums/          # Расширенные игровые перечисления (DamageType, EffectType, Colors)
+├── Extensions/     # Методы расширения (Player, Network, Damage, Reflection, Dummy)
+├── Features/       # Готовые фичи (Global/Player Cooldown, PrefabManager, Helpers)
+├── Interfaces/     # Системные интерфейсы фреймворка
+├── Loader/         # Модульный загрузчик (топологическая сортировка графа DAG)
+└── Services/       # Сервисы (EventBus, ServiceContainer, PlaceholderReplacer)
 ```
 
 ---
 
-## 📦 Основные подсистемы
+## 🛠️ Примеры использования
 
-### 1. Модульный загрузчик (`Capy.Core.Loader`)
-* **Автоматическое обнаружение**: сканирует все типы сборки, реализующие интерфейс `ICapyModule`.
-* **Граф зависимостей**: атрибут `[DependsOn(typeof(OtherModule))]` строит направленный ациклический граф (DAG) и разрешает порядок инициализации через алгоритм топологической сортировки.
-* **Асинхронный и синхронный жизненный цикл**: поддержка методов `OnEnabled()`, `OnEnabledAsync()`, `OnDisabled()`, `OnDisabledAsync()`.
-* **Автоматическая регистрация конфигураций**: каждый модуль, наследуемый от `BaseModule<TConfig>`, автоматически связывается со своим YAML/JSON конфигом.
+### 1. Создание собственного модуля с зависимостями
+
+Все модули наследуются от `BaseModule<TConfig>` и автоматически регистрируются в системе:
 
 ```csharp
+using Capy.Core.API;
+using Capy.Core.API.Attributes;
+
+// Указываем зависимости: модуль запустится только после DatabaseModule
 [DependsOn(typeof(DatabaseModule))]
-public sealed class MyCustomModule : BaseModule<MyConfig>
+public sealed class MyFeatureModule : BaseModule<MyFeatureConfig>
 {
-    public override string Name => "MyCustomModule";
+    public override string Name => "MyFeature";
     public override string Author => "CapybaraPR";
     public override Version Version => new(1, 0, 0);
 
     public override void OnEnabled()
     {
-        Log.Info("Модуль успешно запущен!");
+        Log.Info($"Модуль MyFeature успешно запущен с параметром: {Config.SomeSetting}");
+    }
+
+    public override void OnDisabled()
+    {
+        Log.Info("Модуль MyFeature остановлен.");
     }
 }
 ```
 
 ---
 
-### 2. Контейнер внедрения зависимостей (`Capy.Core.Services.ServiceContainer`)
-Легковесный и быстрый встроенный IoC-контейнер:
-* Регистрация синглтонов (`RegisterSingleton<TInterface, TImplementation>()` или экземпляров `RegisterInstance<T>()`).
-* Регистрация фабрик и переходных зависимостей (`RegisterTransient<T>()`).
-* Автоматическое внедрение в конструкторы модулей и сервисов.
+### 2. Работа с базой данных (LiteDB / MongoDB)
 
----
+Универсальный доступ к коллекциям данных игроков и сервера:
 
-### 3. Шина событий (`Capy.Core.Services.EventBus`)
-Типизированная издательско-подписная система для безопасного обмена данными между изолированными модулями:
 ```csharp
-// Подписка на событие
-EventBus.Subscribe<PlayerLevelUpEvent>(ev => 
-{
-    Log.Info($"Игрок {ev.Player.Nickname} повысил уровень до {ev.NewLevel}!");
-});
+using Capy.Core.Database;
+using Capy.Core.Database.Models;
 
-// Публикация события
-EventBus.Publish(new PlayerLevelUpEvent(player, 10));
+// Сохранение или обновление данных игрока
+public void SavePlayerData(Player player, int pointsToAdd)
+{
+    var db = DatabaseModule.DatabaseProvider;
+    var collection = db.GetCollection<UserAccount>("players");
+
+    var account = collection.FindById(player.UserId) ?? new UserAccount 
+    { 
+        UserId = player.UserId,
+        Nickname = player.Nickname 
+    };
+
+    account.Points += pointsToAdd;
+    account.LastSeen = DateTime.UtcNow;
+
+    collection.Upsert(account);
+}
 ```
 
 ---
 
-### 4. Провайдеры баз данных (`Capy.Core.Database`)
-Унифицированный слой абстракции работы с хранилищами данных:
-* **LiteDB**: быстрое локальное встраиваемое NoSQL-хранилище (BSON) без необходимости разворачивать сторонние СУБД.
-* **MongoDB Driver**: масштабируемая сетевая база данных для синхронизации данных между несколькими игровыми серверами (NR, MRP).
-* **InMemory Database**: высокоскоростной кэш для временных сессионных данных.
+### 3. Использование шины событий (`EventBus`)
+
+Слабосвязанный обмен событиями между изолированными модулями:
+
+```csharp
+using Capy.Core.Services;
+
+// 1. Определение типа события
+public readonly struct PlayerPurchasedItemEvent
+{
+    public Player Buyer { get; }
+    public string ItemName { get; }
+
+    public PlayerPurchasedItemEvent(Player buyer, string itemName)
+    {
+        Buyer = buyer;
+        ItemName = itemName;
+    }
+}
+
+// 2. Подписка на событие в любом модуле
+EventBus.Subscribe<PlayerPurchasedItemEvent>(ev =>
+{
+    ev.Buyer.ShowHint($"Вы успешно приобрели: <color=#00FF88>{ev.ItemName}</color>!", 3f);
+});
+
+// 3. Публикация события
+EventBus.Publish(new PlayerPurchasedItemEvent(player, "MicroHID"));
+```
 
 ---
 
-### 5. Система защиты и лицензирования (`Capy.Core.DRM`)
-* **Hardware ID Binding**: снятие цифрового отпечатка оборудования (CPU ID, Motherboard Serial, MAC-адреса).
-* **Криптографическая верификация лицензий**: асимметричная RSA-проверка цифровых подписей лицензионных файлов (`license.key`).
-* **Анти-тампер и контроль целостности сборки**.
+### 4. Кулдауны и плейсхолдеры
 
----
+```csharp
+using Capy.Core.Features;
+using Capy.Core.Services;
 
-### 6. Вспомогательные сервисы
-* **`PlaceholderReplacer`**: движок динамической подстановки тегов (например, `{player_name}`, `{server_tps}`, `{round_duration}`, `{custom_item}`).
-* **`CooldownService`**: потокобезопасный менеджер кулдаунов способностей и команд по `UserId` / `string`.
+// Проверка и установка кулдауна для игрока
+if (PlayerCooldown.HasCooldown(player.UserId, "ability_dash"))
+{
+    float remaining = PlayerCooldown.GetRemaining(player.UserId, "ability_dash");
+    player.ShowHint($"Способность перезаряжается: {remaining:F1} сек.", 2f);
+    return;
+}
+
+PlayerCooldown.SetCooldown(player.UserId, "ability_dash", TimeSpan.FromSeconds(15));
+
+// Подстановка плейсхолдеров в текст
+string rawText = "Привет, %player_name%! Онлайн: %server_players%/%server_max_players%.";
+string formatted = PlaceholderReplacer.Replace(rawText, player);
+// -> "Привет, Capybara! Онлайн: 18/25."
+```
