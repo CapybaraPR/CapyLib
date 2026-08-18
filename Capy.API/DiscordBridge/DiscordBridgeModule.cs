@@ -16,11 +16,13 @@ public sealed class DiscordBridgeModule : BaseModule<DiscordBridgeConfig>
     private BridgeEventLogger? _eventLogger;
     private DiscordLinkService? _linkService;
     private DiscordRoleController? _roleController;
+    private StaffService? _staffService;
     private BridgeAuth? _auth;
 
     public static DiscordBridgeModule? Instance => _instance;
     public static DiscordLinkService? LinkService => _instance?._linkService;
     public static DiscordRoleController? RoleController => _instance?._roleController;
+    public static StaffService? StaffService => _instance?._staffService;
     public static BridgeEventStore? EventStore => _instance?._eventStore;
     public static bool IsRunning => _instance?._apiServer != null;
 
@@ -40,11 +42,13 @@ public sealed class DiscordBridgeModule : BaseModule<DiscordBridgeConfig>
             _eventLogger = new BridgeEventLogger(Config, _eventStore);
             _eventLogger.Subscribe();
 
+            _staffService = new StaffService();
+
             _linkService = new DiscordLinkService(Config);
             _roleController = new DiscordRoleController(Config, _linkService);
             _roleController.Start();
 
-            _apiServer = new BridgeApiServer(Config, _eventStore, _eventLogger, _linkService, _roleController, _auth);
+            _apiServer = new BridgeApiServer(Config, _eventStore, _eventLogger, _linkService, _roleController, _staffService, _auth);
             _apiServer.Start();
 
             Log.Info("Модуль интеграции DiscordBridge успешно запущен.");
@@ -64,6 +68,9 @@ public sealed class DiscordBridgeModule : BaseModule<DiscordBridgeConfig>
 
             _roleController?.Stop();
             _roleController = null;
+
+            _staffService?.Dispose();
+            _staffService = null;
 
             _linkService?.Dispose();
             _linkService = null;

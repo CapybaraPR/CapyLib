@@ -418,3 +418,64 @@ public sealed class ErrorResponse
     [JsonPropertyName("code")]
     public string? Code { get; set; }
 }
+
+public sealed class StaffAddRequest
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = string.Empty;
+
+    [JsonPropertyName("discord_user_id")]
+    public ulong DiscordUserId { get; set; }
+
+    [JsonPropertyName("discord_user_name")]
+    public string DiscordUserName { get; set; } = string.Empty;
+
+    [JsonPropertyName("group")]
+    public string Group { get; set; } = string.Empty;
+
+    [JsonPropertyName("server_scope")]
+    public string ServerScope { get; set; } = "all";
+
+    [JsonPropertyName("actor_discord_id")]
+    public ulong ActorDiscordId { get; set; }
+
+    [JsonPropertyName("actor_discord_name")]
+    public string ActorDiscordName { get; set; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class StaffRemoveRequest
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = string.Empty;
+
+    [JsonPropertyName("actor_discord_id")]
+    public ulong ActorDiscordId { get; set; }
+
+    [JsonPropertyName("actor_discord_name")]
+    public string ActorDiscordName { get; set; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class StaffListResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("staff")]
+    public List<Capy.Core.Database.Models.StaffMemberModel> Staff { get; set; } = new();
+}
+
+public sealed class StaffMemberResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("member")]
+    public Capy.Core.Database.Models.StaffMemberModel? Member { get; set; }
+}
+

@@ -101,22 +101,48 @@ public sealed class BridgeEventLogger
         LogDiscordCommand(command, reason, false, actor, access);
     }
 
-    private void OnKicking(KickingEventArgs ev) => AddPunishment(
-        "kick_attempt", "Кик игрока", ev.IsAllowed ? "info" : "warning",
-        ev.IsAllowed ? "Попытка кика разрешена." : "Попытка кика отклонена.",
-        Field("Исполнитель", DescribePlayer(ev.Player)), Field("Цель", DescribePlayer(ev.Target)), Field("Причина", ev.Reason));
+    private readonly Dictionary<string, DateTime> _joinTimes = new(StringComparer.OrdinalIgnoreCase);
 
-    private void OnBanning(BanningEventArgs ev) => AddPunishment(
-        "ban_attempt", "Бан игрока", ev.IsAllowed ? "info" : "warning",
-        ev.IsAllowed ? "Попытка бана разрешена." : "Попытка бана отклонена.",
-        Field("Исполнитель", DescribePlayer(ev.Player)), Field("Цель", DescribePlayer(ev.Target)),
-        Field("Срок, сек.", ev.Duration.ToString(CultureInfo.InvariantCulture)), Field("Причина", ev.Reason),
-        Field("Тип", ev.CommandSender?.GetType().Name ?? "unknown"));
+    private void OnKicking(KickingEventArgs ev)
+    {
+        if (ev.IsAllowed && ev.Player != null && !ev.Player.IsHost && !string.IsNullOrWhiteSpace(ev.Player.UserId))
+        {
+            DiscordBridgeModule.StaffService?.RecordAction(ev.Player.UserId, "kick");
+        }
 
-    private void OnIssuingMute(IssuingMuteEventArgs ev) => AddPunishment(
-        "mute", "Мут игрока", ev.IsAllowed ? "info" : "warning",
-        ev.IsAllowed ? "Игроку выдан мут." : "Выдача мута отклонена.",
-        Field("Игрок", DescribePlayer(ev.Player)), Field("Тип", ev.IsIntercom ? "Интерком" : "Голосовой чат"));
+        AddPunishment(
+            "kick_attempt", "Кик игрока", ev.IsAllowed ? "info" : "warning",
+            ev.IsAllowed ? "Попытка кика разрешена." : "Попытка кика отклонена.",
+            Field("Исполнитель", DescribePlayer(ev.Player)), Field("Цель", DescribePlayer(ev.Target)), Field("Причина", ev.Reason));
+    }
+
+    private void OnBanning(BanningEventArgs ev)
+    {
+        if (ev.IsAllowed && ev.Player != null && !ev.Player.IsHost && !string.IsNullOrWhiteSpace(ev.Player.UserId))
+        {
+            DiscordBridgeModule.StaffService?.RecordAction(ev.Player.UserId, "ban");
+        }
+
+        AddPunishment(
+            "ban_attempt", "Бан игрока", ev.IsAllowed ? "info" : "warning",
+            ev.IsAllowed ? "Попытка бана разрешена." : "Попытка бана отклонена.",
+            Field("Исполнитель", DescribePlayer(ev.Player)), Field("Цель", DescribePlayer(ev.Target)),
+            Field("Срок, сек.", ev.Duration.ToString(CultureInfo.InvariantCulture)), Field("Причина", ev.Reason),
+            Field("Тип", ev.CommandSender?.GetType().Name ?? "unknown"));
+    }
+
+    private void OnIssuingMute(IssuingMuteEventArgs ev)
+    {
+        if (ev.IsAllowed && ev.Player != null && !ev.Player.IsHost && !string.IsNullOrWhiteSpace(ev.Player.UserId))
+        {
+            DiscordBridgeModule.StaffService?.RecordAction(ev.Player.UserId, "mute");
+        }
+
+        AddPunishment(
+            "mute", "Мут игрока", ev.IsAllowed ? "info" : "warning",
+            ev.IsAllowed ? "Игроку выдан мут." : "Выдача мута отклонена.",
+            Field("Игрок", DescribePlayer(ev.Player)), Field("Тип", ev.IsIntercom ? "Интерком" : "Голосовой чат"));
+    }
 
     private void OnRevokingMute(RevokingMuteEventArgs ev) => AddPunishment(
         "unmute", "Снятие мута", ev.IsAllowed ? "info" : "warning",
@@ -132,13 +158,36 @@ public sealed class BridgeEventLogger
         "unbanned", "Игрок разбанен", "info", "Запись о бане удалена.",
         Field("Идентификатор", ev.TargetId), Field("Тип", ev.BanType.ToString()));
 
-    private void OnVerified(VerifiedEventArgs ev) => AddServer(
-        "player_verified", "Игрок подключился", $"{DescribePlayer(ev.Player)} прошёл проверку.",
-        Field("Онлайн", ConnectedCount().ToString(CultureInfo.InvariantCulture)));
+    private void OnVerified(VerifiedEventArgs ev)
+    {
+        if (ev.Player != null && !string.IsNullOrWhiteSpace(ev.Player.UserId))
+        {
+            _joinTimes[ev.Player.UserId] = DateTime.UtcNow;
+            DiscordBridgeModule.StaffService?.OnPlayerVerified(ev.Player);
+        }
 
-    private void OnLeft(LeftEventArgs ev) => AddServer(
-        "player_left", "Игрок отключился", $"{DescribePlayer(ev.Player)} покинул сервер.",
-        Field("Онлайн", ConnectedCount().ToString(CultureInfo.InvariantCulture)));
+        AddServer(
+            "player_verified", "Игрок подключился", $"{DescribePlayer(ev.Player)} прошёл проверку.",
+            Field("Онлайн", ConnectedCount().ToString(CultureInfo.InvariantCulture)));
+    }
+
+    private void OnLeft(LeftEventArgs ev)
+    {
+        if (ev.Player != null && !string.IsNullOrWhiteSpace(ev.Player.UserId))
+        {
+            long durationSeconds = 0;
+            if (_joinTimes.TryGetValue(ev.Player.UserId, out DateTime joinTime))
+            {
+                durationSeconds = (long)(DateTime.UtcNow - joinTime).TotalSeconds;
+                _joinTimes.Remove(ev.Player.UserId);
+            }
+            DiscordBridgeModule.StaffService?.OnPlayerLeft(ev.Player.UserId, durationSeconds, ev.Player.IsOverwatchEnabled);
+        }
+
+        AddServer(
+            "player_left", "Игрок отключился", $"{DescribePlayer(ev.Player)} покинул сервер.",
+            Field("Онлайн", ConnectedCount().ToString(CultureInfo.InvariantCulture)));
+    }
 
     private void OnDied(DiedEventArgs ev) => AddServer(
         "player_died", "Игрок погиб", $"{DescribePlayer(ev.Player)} погиб.",

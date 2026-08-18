@@ -36,6 +36,7 @@ public sealed class BridgeApiServer : IDisposable
     private readonly BridgeEventLogger _eventLogger;
     private readonly DiscordLinkService _linkService;
     private readonly DiscordRoleController _roleController;
+    private readonly StaffService _staffService;
     private readonly BridgeAuth _auth;
     private readonly MainThreadDispatcher _dispatcher = new();
     private readonly CancellationTokenSource _lifetime = new();
@@ -53,6 +54,7 @@ public sealed class BridgeApiServer : IDisposable
         BridgeEventLogger eventLogger,
         DiscordLinkService linkService,
         DiscordRoleController roleController,
+        StaffService staffService,
         BridgeAuth auth)
     {
         _config = config;
@@ -60,6 +62,7 @@ public sealed class BridgeApiServer : IDisposable
         _eventLogger = eventLogger;
         _linkService = linkService;
         _roleController = roleController;
+        _staffService = staffService;
         _auth = auth;
         _requestSlots = new SemaphoreSlim(Math.Max(1, Math.Min(config.MaxConcurrentRequests, 64)));
     }
@@ -264,9 +267,105 @@ public sealed class BridgeApiServer : IDisposable
                 await HandleSyncLinkRolesAsync(context.Response, bodyBytes).ConfigureAwait(false);
                 break;
 
+            case "/staff" when method == "GET":
+                HandleGetStaff(context.Response);
+                break;
+
+            case "/staff/add" when method == "POST":
+                await HandleAddStaffAsync(context.Response, bodyBytes).ConfigureAwait(false);
+                break;
+
+            case "/staff/remove" when method == "POST":
+                await HandleRemoveStaffAsync(context.Response, bodyBytes).ConfigureAwait(false);
+                break;
+
             default:
                 await RespondJsonAsync(context.Response, HttpStatusCode.NotFound, new ErrorResponse { Error = $"Эндпоинт {method} {path} не найден." }).ConfigureAwait(false);
                 break;
+        }
+    }
+
+    private void HandleGetStaff(HttpListenerResponse response)
+    {
+        List<Capy.Core.Database.Models.StaffMemberModel> staff = _staffService.GetAllStaff(activeOnly: true);
+        RespondJson(response, HttpStatusCode.OK, new StaffListResponse { Success = true, Staff = staff });
+    }
+
+    private async Task HandleAddStaffAsync(HttpListenerResponse response, byte[] bodyBytes)
+    {
+        StaffAddRequest? req;
+        try
+        {
+            req = JsonSerializer.Deserialize<StaffAddRequest>(bodyBytes, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(response, HttpStatusCode.BadRequest, new ErrorResponse { Error = "Некорректный JSON: " + ex.Message }).ConfigureAwait(false);
+            return;
+        }
+
+        if (req == null || string.IsNullOrWhiteSpace(req.UserId))
+        {
+            await RespondJsonAsync(response, HttpStatusCode.BadRequest, new ErrorResponse { Error = "Поле user_id обязательно." }).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            Capy.Core.Database.Models.StaffMemberModel member = _staffService.AddOrUpdateStaff(
+                req.UserId,
+                req.DiscordUserId,
+                req.DiscordUserName,
+                req.Group,
+                req.ServerScope,
+                req.ActorDiscordId,
+                req.ActorDiscordName,
+                req.Reason);
+
+            await RespondJsonAsync(response, HttpStatusCode.OK, new StaffMemberResponse { Success = true, Member = member }).ConfigureAwait(false);
+        }
+        catch (ArgumentException aex)
+        {
+            await RespondJsonAsync(response, HttpStatusCode.BadRequest, new ErrorResponse { Error = aex.Message }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(response, HttpStatusCode.InternalServerError, new ErrorResponse { Error = ex.Message }).ConfigureAwait(false);
+        }
+    }
+
+    private async Task HandleRemoveStaffAsync(HttpListenerResponse response, byte[] bodyBytes)
+    {
+        StaffRemoveRequest? req;
+        try
+        {
+            req = JsonSerializer.Deserialize<StaffRemoveRequest>(bodyBytes, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(response, HttpStatusCode.BadRequest, new ErrorResponse { Error = "Некорректный JSON: " + ex.Message }).ConfigureAwait(false);
+            return;
+        }
+
+        if (req == null || string.IsNullOrWhiteSpace(req.UserId))
+        {
+            await RespondJsonAsync(response, HttpStatusCode.BadRequest, new ErrorResponse { Error = "Поле user_id обязательно." }).ConfigureAwait(false);
+            return;
+        }
+
+        bool removed = _staffService.RemoveStaff(
+            req.UserId,
+            req.ActorDiscordId,
+            req.ActorDiscordName,
+            req.Reason);
+
+        if (removed)
+        {
+            await RespondJsonAsync(response, HttpStatusCode.OK, new { success = true, message = "Администратор успешно снят." }).ConfigureAwait(false);
+        }
+        else
+        {
+            await RespondJsonAsync(response, HttpStatusCode.NotFound, new ErrorResponse { Error = "Активный администратор с таким UserId не найден." }).ConfigureAwait(false);
         }
     }
 
