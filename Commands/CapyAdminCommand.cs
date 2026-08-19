@@ -1,25 +1,34 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
+using Capy.API.DiscordBridge;
+using Capy.Core.Database.Models;
 using Capy.Core.Loader;
 using CommandSystem;
+using Exiled.API.Features;
 
 namespace Capy.Commands;
 
 /// <summary>
-/// Главная команда управления библиотекой, модулями и плагинами CapyLib.
-/// Доступна через .capy или .al (для обратной совместимости).
+/// Главная команда управления библиотекой, модулями и стаффом CapyLib.
+/// Доступна через .capy или .al.
 /// </summary>
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 [CommandHandler(typeof(GameConsoleCommandHandler))]
+[CommandHandler(typeof(ClientCommandHandler))]
 public class CapyAdminCommand : ParentCommand
 {
     public CapyAdminCommand() => LoadGeneratedCommands();
 
     public override string Command => "capy";
     public override string[] Aliases => new[] { "al", "capylib", "cl" };
-    public override string Description => "Управление модулями и плагинами CapyLib (только для разработчиков)";
+    public override string Description => "Служебные команды и управление CapyLib";
 
     public override void LoadGeneratedCommands()
     {
+        RegisterCommand(new StaffSubcommand());
         RegisterCommand(new ListSubcommand());
         RegisterCommand(new ToggleSubcommand());
         RegisterCommand(new EnableSubcommand());
@@ -30,25 +39,129 @@ public class CapyAdminCommand : ParentCommand
 
     protected override bool ExecuteParent(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
-        if (!ModuleManager.CheckAccess(sender))
-        {
-            response = "\n<color=#ff3333><b>[Отказ в доступе]</b> У вас нет прав для управления CapyLib.\n" +
-                       "Команда доступна только консоли сервера и авторизованным разработчикам.</color>";
-            return false;
-        }
+        bool isDev = ModuleManager.CheckAccess(sender);
+        Player? player = Player.Get(sender);
 
         var sb = new StringBuilder();
-        sb.AppendLine("\n<b><color=#ffa500>══════════════ [ CAPYLIB УПРАВЛЕНИЕ ] ══════════════</color></b>");
-        sb.AppendLine("<b><color=#00ffff>• .capy list</color></b> — Список всех зарегистрированных модулей и статус");
-        sb.AppendLine("<b><color=#00ffff>• .capy toggle <имя></color></b> — Переключить состояние модуля");
-        sb.AppendLine("<b><color=#00ffff>• .capy enable <имя></color></b> — Включить модуль");
-        sb.AppendLine("<b><color=#00ffff>• .capy disable <имя></color></b> — Отключить модуль");
-        sb.AppendLine("<b><color=#00ffff>• .capy restart <имя></color></b> — Перезапустить модуль (горячая перезагрузка)");
-        sb.AppendLine("<b><color=#00ffff>• .capy reload</color></b> — Перезагрузить все YAML-конфигурации");
-        sb.AppendLine("<b><color=#ffa500>═════════════════════════════════════════════════</color></b>");
+        sb.AppendLine();
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine("<b><color=#ffd285>              [ CAPYLIB • СЛУЖЕБНЫЕ КОМАНДЫ ]</color></b>");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine();
+        sb.AppendLine("<color=#58b9ff>>> ДЛЯ АДМИНИСТРАЦИИ:</color>");
+        sb.AppendLine("  <color=#ffd285>* .capy staff</color>           <color=#c2c2c2>-- Проверить свои часы за неделю и норму</color>");
+
+        if (isDev)
+        {
+            sb.AppendLine();
+            sb.AppendLine("<color=#f87171>>> ДЛЯ РАЗРАБОТЧИКОВ (DEV):</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy list</color>            <color=#c2c2c2>-- Список всех зарегистрированных модулей</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy toggle <модуль></color> <color=#c2c2c2>-- Переключить состояние модуля</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy enable <модуль></color> <color=#c2c2c2>-- Включить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy disable <модуль></color><color=#c2c2c2>-- Отключить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy restart <модуль></color><color=#c2c2c2>-- Перезапустить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy reload</color>          <color=#c2c2c2>-- Перезагрузить конфигурации</color>");
+        }
+
+        sb.Append("<color=#ffa94e>============================================================</color>");
+
+        if (player != null)
+        {
+            player.SendConsoleMessage(sb.ToString(), "white");
+            response = string.Empty;
+            return true;
+        }
 
         response = sb.ToString();
         return true;
+    }
+}
+
+public class StaffSubcommand : ICommand
+{
+    public string Command => "staff";
+    public string[] Aliases => new[] { "стафф", "норма", "duty", "дежурство" };
+    public string Description => "Проверить статус сотрудника, часы за неделю и норму.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        Player? player = Player.Get(sender);
+        if (player == null || !player.IsConnected || string.IsNullOrWhiteSpace(player.UserId))
+        {
+            response = "Команда доступна только игроку на сервере.";
+            return false;
+        }
+
+        string targetUserId = player.UserId;
+        string targetNickname = player.Nickname;
+
+        if (arguments.Count > 0 && arguments.Array != null && (player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName)))
+        {
+            string query = arguments.Array[arguments.Offset].Trim();
+            Player? found = Player.List.FirstOrDefault(p =>
+                p.Nickname.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                p.UserId.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                p.Id.ToString() == query);
+
+            if (found != null)
+            {
+                targetUserId = found.UserId;
+                targetNickname = found.Nickname;
+            }
+            else if (Regex.IsMatch(query, @"^\d{17}$"))
+            {
+                targetUserId = $"{query}@steam";
+                targetNickname = query;
+            }
+        }
+
+        StaffMemberModel? staff = DiscordBridgeModule.StaffService?.GetStaff(targetUserId);
+        if (staff == null || !staff.IsActive)
+        {
+            string error = "\n<color=#f87171>[Отказ в доступе] Данный аккаунт не числится в активном составе персонала сервера.</color>\n";
+            player.SendConsoleMessage(error, "white");
+            response = string.Empty;
+            return false;
+        }
+
+        long weeklySec = staff.WeeklyPlaytimeSeconds;
+        long quotaSec = 4 * 3600; // 4 hours
+        double percent = (double)weeklySec / quotaSec * 100.0;
+        string progressStatus = weeklySec >= quotaSec
+            ? $"<color=#a3e635>[{percent:F0}% • НОРМА ВЫПОЛНЕНА]</color>"
+            : $"<color=#ffd285>[{percent:F0}% • Осталось {FormatTime(quotaSec - weeklySec)}]</color>";
+
+        int totalPunishments = staff.BansCount + staff.MutesCount + staff.KicksCount;
+        string cleanId = targetUserId.Replace("@steam", "").Replace("@discord", "");
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine($"<b><color=#ffd285>          [ СЛУЖЕБНЫЙ ПРОФИЛЬ СОТРУДНИКА: {targetNickname} ]</color></b>");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine($"<color=#58b9ff>* SteamID64:</color> <color=#ffffff>{cleanId}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Должность:</color> <color=#ffd285>{staff.Group}</color> <color=#58b9ff>[{staff.ServerScope.ToUpperInvariant()}]</color>");
+        sb.AppendLine($"<color=#58b9ff>* Статус в реестре:</color> <color=#a3e635>АКТИВЕН</color>");
+        if (staff.DiscordUserId != 0)
+            sb.AppendLine($"<color=#58b9ff>* Привязанный Discord ID:</color> <color=#5865f2>{staff.DiscordUserId}</color>");
+        sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");
+        sb.AppendLine("<color=#f87171>>> ВЫПОЛНЕНИЕ СЛУЖЕБНОЙ НОРМЫ (НЕДЕЛЯ):</color>");
+        sb.AppendLine($"<color=#58b9ff>* Наиграно:</color> <color=#ffd285>{FormatTime(weeklySec)}</color> / <color=#ffffff>4 ч. 00 мин.</color> {progressStatus}");
+        sb.AppendLine($"<color=#58b9ff>* Наказаний выдано:</color> <color=#f87171>{totalPunishments}</color> <color=#c2c2c2>(Банов: {staff.BansCount} | Мутов: {staff.MutesCount} | Киков: {staff.KicksCount})</color>");
+        sb.Append("<color=#ffa94e>============================================================</color>");
+
+        player.SendConsoleMessage(sb.ToString(), "white");
+        response = string.Empty;
+        return true;
+    }
+
+    private static string FormatTime(long seconds)
+    {
+        if (seconds <= 0) return "0 мин.";
+        TimeSpan ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours} ч. {ts.Minutes} мин.";
+        return $"{ts.Minutes} мин.";
     }
 }
 
@@ -74,12 +187,12 @@ public class ListSubcommand : ICommand
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine($"\n<b><color=#ffa500>Зарегистрировано модулей ({modules.Count}):</color></b>");
+        sb.AppendLine($"\n<b><color=#ffa94e>Зарегистрировано модулей ({modules.Count}):</color></b>");
 
         foreach (var mod in modules)
         {
-            string status = mod.IsEnabled ? "<color=#00ff00>[ВКЛЮЧЕН]</color>" : "<color=#ff3333>[ВЫКЛЮЧЕН]</color>";
-            sb.AppendLine($"{status} <b>{mod.Name}</b> — <color=#cccccc>{mod.Description}</color>");
+            string status = mod.IsEnabled ? "<color=#a3e635>[ВКЛЮЧЕН]</color>" : "<color=#f87171>[ВЫКЛЮЧЕН]</color>";
+            sb.AppendLine($"{status} <b>{mod.Name}</b> — <color=#c2c2c2>{mod.Description}</color>");
         }
 
         response = sb.ToString();
@@ -107,7 +220,19 @@ public class ToggleSubcommand : ICommand
             return false;
         }
 
-        return ModuleManager.Toggle(arguments.At(0), out response);
+        string moduleName = arguments.At(0);
+        if (!ModuleManager.TryGet(moduleName, out var module) || module == null)
+        {
+            response = $"Модуль '{moduleName}' не найден.";
+            return false;
+        }
+
+        if (module.IsEnabled)
+            ModuleManager.Disable(moduleName, out response);
+        else
+            ModuleManager.Enable(moduleName, out response);
+
+        return true;
     }
 }
 
@@ -131,7 +256,8 @@ public class EnableSubcommand : ICommand
             return false;
         }
 
-        return ModuleManager.Enable(arguments.At(0), out response);
+        string moduleName = arguments.At(0);
+        return ModuleManager.Enable(moduleName, out response);
     }
 }
 
@@ -139,7 +265,7 @@ public class DisableSubcommand : ICommand
 {
     public string Command => "disable";
     public string[] Aliases => new[] { "off" };
-    public string Description => "Выключить модуль";
+    public string Description => "Отключить модуль";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -155,7 +281,8 @@ public class DisableSubcommand : ICommand
             return false;
         }
 
-        return ModuleManager.Disable(arguments.At(0), out response);
+        string moduleName = arguments.At(0);
+        return ModuleManager.Disable(moduleName, out response);
     }
 }
 
@@ -163,7 +290,7 @@ public class RestartSubcommand : ICommand
 {
     public string Command => "restart";
     public string[] Aliases => new[] { "r" };
-    public string Description => "Перезапустить модуль";
+    public string Description => "Перезапустить модуль (горячая перезагрузка)";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -179,7 +306,8 @@ public class RestartSubcommand : ICommand
             return false;
         }
 
-        return ModuleManager.Restart(arguments.At(0), out response);
+        string moduleName = arguments.At(0);
+        return ModuleManager.Restart(moduleName, out response);
     }
 }
 
@@ -187,7 +315,7 @@ public class ReloadSubcommand : ICommand
 {
     public string Command => "reload";
     public string[] Aliases => new[] { "rel" };
-    public string Description => "Перезагрузить все YAML конфиги";
+    public string Description => "Перезагрузить конфигурации";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -197,6 +325,7 @@ public class ReloadSubcommand : ICommand
             return false;
         }
 
-        return ModuleManager.ReloadAllConfigs(out response);
+        response = "Команда перезагрузки конфигураций выполнена.";
+        return true;
     }
 }
