@@ -38,39 +38,21 @@ public sealed class StaffService : IDisposable
         {
             try
             {
-                _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
-                _collection = _db.GetCollection<StaffMemberModel>("staff");
+                if (CapyPlugin.Instance?.Database is LiteDbProvider provider)
+                {
+                    _collection = provider.GetCollection<StaffMemberModel>("staff");
+                }
+
+                if (_collection == null)
+                {
+                    _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
+                    _collection = _db.GetCollection<StaffMemberModel>("staff");
+                }
+
                 _collection.EnsureIndex(x => x.Id, true);
                 _collection.EnsureIndex(x => x.DiscordUserId, false);
                 _collection.EnsureIndex(x => x.IsActive, false);
-                Log.Info($"[StaffService] База данных персонала успешно инициализирована (CapyData.db, Shared mode): {_dbPath}");
-
-                // Auto-migrate from legacy StaffRegistry.db if present
-                string legacyDbPath = Path.Combine(Path.GetDirectoryName(_dbPath) ?? string.Empty, "StaffRegistry.db");
-                if (File.Exists(legacyDbPath))
-                {
-                    try
-                    {
-                        using (var oldDb = new LiteDatabase($"Filename={legacyDbPath};Connection=shared"))
-                        {
-                            var oldCol = oldDb.GetCollection<StaffMemberModel>("staff");
-                            var oldStaff = oldCol.FindAll().ToList();
-                            if (oldStaff.Count > 0)
-                            {
-                                foreach (var s in oldStaff)
-                                {
-                                    _collection.Upsert(s);
-                                }
-                                Log.Info($"[StaffService] Миграция: {oldStaff.Count} записей персонала успешно перенесены из StaffRegistry.db в единую базу CapyData.db!");
-                            }
-                        }
-                        File.Delete(legacyDbPath);
-                    }
-                    catch (Exception mex)
-                    {
-                        Log.Warn($"[StaffService] Предупреждение миграции StaffRegistry.db: {mex.Message}");
-                    }
-                }
+                Log.Info($"[StaffService] База данных персонала успешно инициализирована (CapyData.db): {_dbPath}");
             }
             catch (Exception ex)
             {
@@ -87,6 +69,7 @@ public sealed class StaffService : IDisposable
             {
                 _db?.Dispose();
                 _db = null;
+                _collection = null;
             }
             catch { }
         }
@@ -155,7 +138,12 @@ public sealed class StaffService : IDisposable
             List<StaffMemberModel> list;
             try
             {
-                if (_collection == null) return new List<StaffMemberModel>();
+                if (_collection == null)
+                {
+                    Initialize();
+                    if (_collection == null) return new List<StaffMemberModel>();
+                }
+
                 list = activeOnly
                     ? _collection.Find(x => x.IsActive).ToList()
                     : _collection.FindAll().ToList();
@@ -163,21 +151,7 @@ public sealed class StaffService : IDisposable
             catch (Exception ex)
             {
                 Log.Error($"[StaffService] Ошибка GetAllStaff: {ex.Message}");
-                try
-                {
-                    // Re-initialize shared connection and retry once
-                    _db?.Dispose();
-                    _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
-                    _collection = _db.GetCollection<StaffMemberModel>("staff");
-                    list = activeOnly
-                        ? _collection.Find(x => x.IsActive).ToList()
-                        : _collection.FindAll().ToList();
-                }
-                catch (Exception retryEx)
-                {
-                    Log.Error($"[StaffService] Повторная попытка чтения не удалась: {retryEx.Message}");
-                    return new List<StaffMemberModel>();
-                }
+                return new List<StaffMemberModel>();
             }
 
             // Real-time enrich online staff from memory cache (0ms latency, thread-safe)

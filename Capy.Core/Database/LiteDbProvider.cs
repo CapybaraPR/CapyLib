@@ -70,4 +70,9 @@ public class LiteDbProvider : IDatabaseProvider
         if (string.IsNullOrEmpty(userId) || _players == null) return false;
         return _players.Delete(userId);
     }
+
+    public ILiteCollection<T>? GetCollection<T>(string name)
+    {
+        return _db?.GetCollection<T>(name);
+    }
 }
