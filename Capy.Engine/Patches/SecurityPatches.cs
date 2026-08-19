@@ -24,7 +24,7 @@ internal static class ProcessGameConsoleQueryPatch
         {
             Exiled.API.Features.Player? player = Exiled.API.Features.Player.Get(__instance.gameObject);
             string msg = Capy.Commands.HelpMessageBuilder.Build(player?.Sender);
-            player?.SendConsoleMessage(msg, "#ffa94e");
+            player?.SendConsoleMessage(msg, "white");
             return false;
         }
         return true;

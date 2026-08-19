@@ -7,6 +7,8 @@ namespace Capy.Commands;
 
 public static class HelpMessageBuilder
 {
+    public const string PrimaryHex = "#ffa94e";
+
     public static string Build(ICommandSender? sender)
     {
         Player? player = sender != null ? Player.Get(sender) : null;
@@ -14,7 +16,7 @@ public static class HelpMessageBuilder
 
         var sb = new StringBuilder();
         sb.AppendLine();
-        sb.AppendLine("============================================================");
+        sb.AppendLine($"<color={PrimaryHex}>============================================================");
         sb.AppendLine("              [ КАПИБАРА SCP:SL • СПИСОК КОМАНД ]");
         sb.AppendLine("============================================================");
         sb.AppendLine();
@@ -41,7 +43,7 @@ public static class HelpMessageBuilder
 
         sb.AppendLine("============================================================");
         sb.AppendLine(">> Наш Discord сервер: discord.gg/capybara");
-        sb.AppendLine("============================================================");
+        sb.Append("============================================================</color>");
 
         return sb.ToString();
     }
@@ -60,7 +62,7 @@ public sealed class HelpCommand : ICommand
         Player? player = Player.Get(sender);
         if (player != null)
         {
-            player.SendConsoleMessage(msg, "#ffa94e");
+            player.SendConsoleMessage(msg, "white");
             response = string.Empty;
             return true;
         }

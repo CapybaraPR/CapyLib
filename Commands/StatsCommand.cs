@@ -69,7 +69,7 @@ public sealed class StatsCommand : ICommand
 
         var sb = new StringBuilder();
         sb.AppendLine();
-        sb.AppendLine("============================================================");
+        sb.AppendLine("<color=#ffa94e>============================================================");
         sb.AppendLine($"           [ СТАТИСТИКА ИГРОКА: {targetNickname} ]");
         sb.AppendLine("============================================================");
         sb.AppendLine($"* SteamID64: {cleanId}");
@@ -92,7 +92,9 @@ public sealed class StatsCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
-        player.SendConsoleMessage(sb.ToString(), "#ffa94e");
+        sb.Append("</color>");
+
+        player.SendConsoleMessage(sb.ToString(), "white");
         response = string.Empty;
         return true;
     }

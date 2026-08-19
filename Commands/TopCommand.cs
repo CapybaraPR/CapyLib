@@ -32,7 +32,7 @@ public sealed class TopCommand : ICommand
 
         var sb = new StringBuilder();
         sb.AppendLine();
-        sb.AppendLine("============================================================");
+        sb.AppendLine("<color=#ffa94e>============================================================");
 
         if (mode == "time" || mode == "время" || mode == "онлайн" || mode == "playtime")
         {
@@ -84,10 +84,12 @@ public sealed class TopCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
+        sb.Append("</color>");
+
         Player? player = Player.Get(sender);
         if (player != null)
         {
-            player.SendConsoleMessage(sb.ToString(), "#ffa94e");
+            player.SendConsoleMessage(sb.ToString(), "white");
             response = string.Empty;
             return true;
         }
