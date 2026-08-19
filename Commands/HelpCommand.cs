@@ -56,7 +56,16 @@ public sealed class HelpCommand : ICommand
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
-        response = HelpMessageBuilder.Build(sender);
+        string msg = HelpMessageBuilder.Build(sender);
+        Player? player = Player.Get(sender);
+        if (player != null)
+        {
+            player.SendConsoleMessage(msg, "#ffa94e");
+            response = string.Empty;
+            return true;
+        }
+
+        response = msg;
         return true;
     }
 }

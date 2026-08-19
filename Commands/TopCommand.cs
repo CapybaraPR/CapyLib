@@ -84,6 +84,14 @@ public sealed class TopCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
+        Player? player = Player.Get(sender);
+        if (player != null)
+        {
+            player.SendConsoleMessage(sb.ToString(), "#ffa94e");
+            response = string.Empty;
+            return true;
+        }
+
         response = sb.ToString();
         return true;
     }

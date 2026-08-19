@@ -92,7 +92,8 @@ public sealed class StatsCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
-        response = sb.ToString();
+        player.SendConsoleMessage(sb.ToString(), "#ffa94e");
+        response = string.Empty;
         return true;
     }
 
