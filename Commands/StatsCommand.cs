@@ -13,7 +13,7 @@ namespace Capy.Commands;
 public sealed class StatsCommand : ICommand
 {
     public string Command { get; } = "stats";
-    public string[] Aliases { get; } = { "стата", "статистика", "профиль", "profile", "me" };
+    public string[] Aliases { get; } = { "profile", "me" };
     public string Description { get; } = "Просмотр личной статистики или профиля игрока.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)

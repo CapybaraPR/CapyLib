@@ -51,7 +51,7 @@ public static class HelpMessageBuilder
 public sealed class HelpCommand : ICommand
 {
     public string Command { get; } = "help";
-    public string[] Aliases { get; } = { "хелп", "помощь", "команды", "cmds", "menu" };
+    public string[] Aliases { get; } = { "cmds", "menu" };
     public string Description { get; } = "Список доступных команд сервера.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)

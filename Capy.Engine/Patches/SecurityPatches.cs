@@ -14,13 +14,7 @@ internal static class ProcessGameConsoleQueryPatch
         if (string.IsNullOrWhiteSpace(query)) return true;
         string q = query.Trim();
         if (q.Equals("help", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals(".help", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals("хелп", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals(".хелп", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals("помощь", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals(".помощь", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals("команды", StringComparison.OrdinalIgnoreCase) ||
-            q.Equals(".команды", StringComparison.OrdinalIgnoreCase))
+            q.Equals(".help", StringComparison.OrdinalIgnoreCase))
         {
             Exiled.API.Features.Player? player = Exiled.API.Features.Player.Get(__instance.gameObject);
             string msg = Capy.Commands.HelpMessageBuilder.Build(player?.Sender);
@@ -68,13 +62,7 @@ internal static class CommandProcessorHelpPatch
         if (string.IsNullOrWhiteSpace(q)) return true;
         string trimmed = q.Trim();
         if (trimmed.Equals("help", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals(".help", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("хелп", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals(".хелп", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("помощь", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals(".помощь", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("команды", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals(".команды", StringComparison.OrdinalIgnoreCase))
+            trimmed.Equals(".help", StringComparison.OrdinalIgnoreCase))
         {
             __result = Capy.Commands.HelpMessageBuilder.Build(sender);
             return false;

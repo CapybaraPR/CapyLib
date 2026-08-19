@@ -12,7 +12,7 @@ namespace Capy.Commands;
 public sealed class TopCommand : ICommand
 {
     public string Command { get; } = "top";
-    public string[] Aliases { get; } = { "топ", "лидеры", "leaderboard", "lb" };
+    public string[] Aliases { get; } = { "leaderboard", "lb" };
     public string Description { get; } = "Таблица лидеров сервера по убийствам, времени или раундам.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
@@ -34,7 +34,7 @@ public sealed class TopCommand : ICommand
         sb.AppendLine();
         sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
-        if (mode == "time" || mode == "время" || mode == "онлайн" || mode == "playtime")
+        if (mode == "time" || mode == "playtime")
         {
             sb.AppendLine("<b><color=#ffd285>              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");
@@ -49,7 +49,7 @@ public sealed class TopCommand : ICommand
                 rank++;
             }
         }
-        else if (mode == "rounds" || mode == "раунды")
+        else if (mode == "rounds")
         {
             sb.AppendLine("<b><color=#ffd285>             [ ТОП-10 ИГРОКОВ ПО РАУНДАМ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");

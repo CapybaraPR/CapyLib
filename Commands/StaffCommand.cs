@@ -13,7 +13,7 @@ namespace Capy.Commands;
 public sealed class StaffCommand : ICommand
 {
     public string Command { get; } = "staff";
-    public string[] Aliases { get; } = { "стафф", "норма", "duty", "дежурство" };
+    public string[] Aliases { get; } = { "duty" };
     public string Description { get; } = "Проверить статус сотрудника, часы за неделю и норму.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)

@@ -79,7 +79,7 @@ public class CapyAdminCommand : ParentCommand
 public class StaffSubcommand : ICommand
 {
     public string Command => "staff";
-    public string[] Aliases => new[] { "стафф", "норма", "duty", "дежурство" };
+    public string[] Aliases => new[] { "duty" };
     public string Description => "Проверить статус сотрудника, часы за неделю и норму.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
