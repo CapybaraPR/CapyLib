@@ -448,7 +448,14 @@ public sealed class BridgeApiServer : IDisposable
         StatusResponse? status = _lastStatus;
         if (status == null)
         {
-            status = await _dispatcher.InvokeAsync(BuildStatusSnapshot, _config.GameThreadTimeoutSeconds).ConfigureAwait(false);
+            try
+            {
+                status = await _dispatcher.InvokeAsync(BuildStatusSnapshot, 2).ConfigureAwait(false);
+            }
+            catch
+            {
+                status = BuildStatusSnapshot();
+            }
             _lastStatus = status;
         }
 
@@ -457,13 +464,29 @@ public sealed class BridgeApiServer : IDisposable
 
     private async Task HandlePlayersAsync(HttpListenerResponse response)
     {
-        PlayersResponse players = await _dispatcher.InvokeAsync(BuildPlayersSnapshot, _config.GameThreadTimeoutSeconds).ConfigureAwait(false);
+        PlayersResponse players;
+        try
+        {
+            players = await _dispatcher.InvokeAsync(BuildPlayersSnapshot, 2).ConfigureAwait(false);
+        }
+        catch
+        {
+            players = BuildPlayersSnapshot();
+        }
         await RespondJsonAsync(response, HttpStatusCode.OK, players).ConfigureAwait(false);
     }
 
     private async Task HandleGroupsAsync(HttpListenerResponse response)
     {
-        GroupsResponse groups = await _dispatcher.InvokeAsync(BuildGroupsSnapshot, _config.GameThreadTimeoutSeconds).ConfigureAwait(false);
+        GroupsResponse groups;
+        try
+        {
+            groups = await _dispatcher.InvokeAsync(BuildGroupsSnapshot, 2).ConfigureAwait(false);
+        }
+        catch
+        {
+            groups = BuildGroupsSnapshot();
+        }
         await RespondJsonAsync(response, HttpStatusCode.OK, groups).ConfigureAwait(false);
     }
 
