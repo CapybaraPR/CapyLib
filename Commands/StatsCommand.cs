@@ -68,8 +68,7 @@ public sealed class StatsCommand : ICommand
         string cleanId = targetUserId.Replace("@steam", "").Replace("@discord", "");
 
         var sb = new StringBuilder();
-        sb.AppendLine();
-        sb.AppendLine("<color=#ffa94e>============================================================");
+        sb.AppendLine("============================================================");
         sb.AppendLine($"           [ СТАТИСТИКА ИГРОКА: {targetNickname} ]");
         sb.AppendLine("============================================================");
         sb.AppendLine($"* SteamID64: {cleanId}");
@@ -92,9 +91,9 @@ public sealed class StatsCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
-        sb.Append("</color>");
 
-        player.SendConsoleMessage(sb.ToString(), "white");
+        string colored = HelpMessageBuilder.Colorize(sb.ToString());
+        player.SendConsoleMessage(colored, "white");
         response = string.Empty;
         return true;
     }

@@ -9,14 +9,27 @@ public static class HelpMessageBuilder
 {
     public const string PrimaryHex = "#ffa94e";
 
+    public static string Colorize(string text, string hex = PrimaryHex)
+    {
+        string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var sb = new StringBuilder();
+        foreach (string line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                sb.AppendLine();
+            else
+                sb.AppendLine($"<color={hex}>{line}</color>");
+        }
+        return sb.ToString().TrimEnd('\r', '\n');
+    }
+
     public static string Build(ICommandSender? sender)
     {
         Player? player = sender != null ? Player.Get(sender) : null;
         bool isStaff = player != null && (player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName));
 
         var sb = new StringBuilder();
-        sb.AppendLine();
-        sb.AppendLine($"<color={PrimaryHex}>============================================================");
+        sb.AppendLine("============================================================");
         sb.AppendLine("              [ КАПИБАРА SCP:SL • СПИСОК КОМАНД ]");
         sb.AppendLine("============================================================");
         sb.AppendLine();
@@ -43,9 +56,9 @@ public static class HelpMessageBuilder
 
         sb.AppendLine("============================================================");
         sb.AppendLine(">> Наш Discord сервер: discord.gg/capybara");
-        sb.Append("============================================================</color>");
+        sb.AppendLine("============================================================");
 
-        return sb.ToString();
+        return Colorize(sb.ToString());
     }
 }
 

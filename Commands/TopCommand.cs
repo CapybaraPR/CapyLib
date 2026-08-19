@@ -31,8 +31,7 @@ public sealed class TopCommand : ICommand
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine();
-        sb.AppendLine("<color=#ffa94e>============================================================");
+        sb.AppendLine("============================================================");
 
         if (mode == "time" || mode == "время" || mode == "онлайн" || mode == "playtime")
         {
@@ -84,17 +83,17 @@ public sealed class TopCommand : ICommand
         }
 
         sb.AppendLine("============================================================");
-        sb.Append("</color>");
 
+        string colored = HelpMessageBuilder.Colorize(sb.ToString());
         Player? player = Player.Get(sender);
         if (player != null)
         {
-            player.SendConsoleMessage(sb.ToString(), "white");
+            player.SendConsoleMessage(colored, "white");
             response = string.Empty;
             return true;
         }
 
-        response = sb.ToString();
+        response = colored;
         return true;
     }
 
