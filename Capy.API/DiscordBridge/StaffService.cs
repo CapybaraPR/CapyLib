@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Capy.Core.Database;
 using Capy.Core.Database.Models;
 using Exiled.API.Features;
 using LiteDB;
