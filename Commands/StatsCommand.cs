@@ -68,32 +68,32 @@ public sealed class StatsCommand : ICommand
         string cleanId = targetUserId.Replace("@steam", "").Replace("@discord", "");
 
         var sb = new StringBuilder();
-        sb.AppendLine("============================================================");
-        sb.AppendLine($"           [ СТАТИСТИКА ИГРОКА: {targetNickname} ]");
-        sb.AppendLine("============================================================");
-        sb.AppendLine($"* SteamID64: {cleanId}");
-        sb.AppendLine($"* Общий онлайн: {FormatTime(playtimeSeconds)}");
-        sb.AppendLine($"* Сыграно раундов: {rounds}");
-        sb.AppendLine($"* Убийств: {kills} | Смертей: {deaths} | K/D: {kd:F2}");
-        sb.AppendLine($"* Побед: {wins}");
-        sb.AppendLine($"* Первый вход: {firstJoin:dd.MM.yyyy}");
+        sb.AppendLine();
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine($"<b><color=#ffd285>           [ СТАТИСТИКА ИГРОКА: {targetNickname} ]</color></b>");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine($"<color=#58b9ff>* SteamID64:</color> <color=#ffffff>{cleanId}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Общий онлайн:</color> <color=#ffd285>{FormatTime(playtimeSeconds)}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Сыграно раундов:</color> <color=#ffffff>{rounds}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Убийств:</color> <color=#a3e635>{kills}</color> <color=#c2c2c2>|</color> <color=#58b9ff>Смертей:</color> <color=#f87171>{deaths}</color> <color=#c2c2c2>|</color> <color=#58b9ff>K/D:</color> <color=#ffd285>{kd:F2}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Побед:</color> <color=#a3e635>{wins}</color>");
+        sb.AppendLine($"<color=#58b9ff>* Первый вход:</color> <color=#c2c2c2>{firstJoin:dd.MM.yyyy}</color>");
 
         if (staff != null && staff.IsActive)
         {
             int totalPunishments = staff.BansCount + staff.MutesCount + staff.KicksCount;
-            sb.AppendLine("------------------------------------------------------------");
-            sb.AppendLine(">> СЛУЖЕБНАЯ ИНФОРМАЦИЯ АДМИНИСТРАЦИИ:");
-            sb.AppendLine($"* Должность: {staff.Group} [{staff.ServerScope.ToUpperInvariant()}]");
-            sb.AppendLine($"* Онлайн за неделю: {FormatTime(staff.WeeklyPlaytimeSeconds)} (Норма: >=4ч)");
-            sb.AppendLine($"* Выдано наказаний: {totalPunishments} (Банов: {staff.BansCount}, Мутов: {staff.MutesCount}, Киков: {staff.KicksCount})");
+            sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");
+            sb.AppendLine("<color=#f87171>>> СЛУЖЕБНАЯ ИНФОРМАЦИЯ АДМИНИСТРАЦИИ:</color>");
+            sb.AppendLine($"<color=#58b9ff>* Должность:</color> <color=#ffd285>{staff.Group} [{staff.ServerScope.ToUpperInvariant()}]</color>");
+            sb.AppendLine($"<color=#58b9ff>* Онлайн за неделю:</color> <color=#ffd285>{FormatTime(staff.WeeklyPlaytimeSeconds)}</color> <color=#c2c2c2>(Норма: >=4ч)</color>");
+            sb.AppendLine($"<color=#58b9ff>* Выдано наказаний:</color> <color=#f87171>{totalPunishments}</color> <color=#c2c2c2>(Банов: {staff.BansCount}, Мутов: {staff.MutesCount}, Киков: {staff.KicksCount})</color>");
             if (staff.DiscordUserId != 0)
-                sb.AppendLine($"* Discord: {staff.DiscordUserId}");
+                sb.AppendLine($"<color=#58b9ff>* Discord:</color> <color=#5865f2>{staff.DiscordUserId}</color>");
         }
 
-        sb.AppendLine("============================================================");
+        sb.Append("<color=#ffa94e>============================================================</color>");
 
-        string colored = HelpMessageBuilder.Colorize(sb.ToString());
-        player.SendConsoleMessage(colored, "white");
+        player.SendConsoleMessage(sb.ToString(), "white");
         response = string.Empty;
         return true;
     }

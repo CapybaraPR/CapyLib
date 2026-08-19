@@ -7,58 +7,43 @@ namespace Capy.Commands;
 
 public static class HelpMessageBuilder
 {
-    public const string PrimaryHex = "#ffa94e";
-
-    public static string Colorize(string text, string hex = PrimaryHex)
-    {
-        string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var sb = new StringBuilder();
-        foreach (string line in lines)
-        {
-            if (string.IsNullOrWhiteSpace(line))
-                sb.AppendLine();
-            else
-                sb.AppendLine($"<color={hex}>{line}</color>");
-        }
-        return sb.ToString().TrimEnd('\r', '\n');
-    }
-
     public static string Build(ICommandSender? sender)
     {
         Player? player = sender != null ? Player.Get(sender) : null;
         bool isStaff = player != null && (player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName));
 
         var sb = new StringBuilder();
-        sb.AppendLine("============================================================");
-        sb.AppendLine("              [ КАПИБАРА SCP:SL • СПИСОК КОМАНД ]");
-        sb.AppendLine("============================================================");
         sb.AppendLine();
-        sb.AppendLine(">> ОСНОВНЫЕ КОМАНДЫ ДЛЯ ИГРОКОВ:");
-        sb.AppendLine("  * .stats                 -- Личная статистика (K/D, раунды, онлайн)");
-        sb.AppendLine("  * .top                   -- Топ-10 игроков сервера по фрагам");
-        sb.AppendLine("  * .top time              -- Топ-10 игроков по наигранному времени");
-        sb.AppendLine("  * .linkdiscord <код>     -- Привязать Discord к аккаунту (/steamsl)");
-        sb.AppendLine("  * .help                  -- Показать эту справку");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine("<b><color=#ffd285>              [ КАПИБАРА SCP:SL • СПИСОК КОМАНД ]</color></b>");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
         sb.AppendLine();
-        sb.AppendLine(">> ТЕГИ И ОТОБРАЖЕНИЕ:");
-        sb.AppendLine("  * .showtag               -- Показать свой тег над головой");
-        sb.AppendLine("  * .hidetag               -- Скрыть свой тег над головой");
-        sb.AppendLine("  * .globaltag             -- Показать глобальный значок");
+        sb.AppendLine("<color=#58b9ff>>> ОСНОВНЫЕ КОМАНДЫ ДЛЯ ИГРОКОВ:</color>");
+        sb.AppendLine("  <color=#ffd285>* .stats</color>                 <color=#c2c2c2>-- Личная статистика (K/D, раунды, онлайн)</color>");
+        sb.AppendLine("  <color=#ffd285>* .top</color>                   <color=#c2c2c2>-- Топ-10 игроков сервера по фрагам</color>");
+        sb.AppendLine("  <color=#ffd285>* .top time</color>              <color=#c2c2c2>-- Топ-10 игроков по наигранному времени</color>");
+        sb.AppendLine("  <color=#ffd285>* .linkdiscord <код></color>     <color=#c2c2c2>-- Привязать Discord к аккаунту (/steamsl)</color>");
+        sb.AppendLine("  <color=#ffd285>* .help</color>                  <color=#c2c2c2>-- Показать эту справку</color>");
+        sb.AppendLine();
+        sb.AppendLine("<color=#a3e635>>> ТЕГИ И ОТОБРАЖЕНИЕ:</color>");
+        sb.AppendLine("  <color=#ffd285>* .showtag</color>               <color=#c2c2c2>-- Показать свой тег над головой</color>");
+        sb.AppendLine("  <color=#ffd285>* .hidetag</color>               <color=#c2c2c2>-- Скрыть свой тег над головой</color>");
+        sb.AppendLine("  <color=#ffd285>* .globaltag</color>             <color=#c2c2c2>-- Показать глобальный значок</color>");
         sb.AppendLine();
 
         if (isStaff)
         {
-            sb.AppendLine(">> ДЛЯ АДМИНИСТРАЦИИ (STAFF):");
-            sb.AppendLine("  * .capy staff            -- Проверить свои часы за неделю и норму");
-            sb.AppendLine("  * .overwatch (или .ow)   -- Включить/выключить режим наблюдения");
+            sb.AppendLine("<color=#f87171>>> ДЛЯ АДМИНИСТРАЦИИ (STAFF):</color>");
+            sb.AppendLine("  <color=#ffd285>* .capy staff</color>            <color=#c2c2c2>-- Проверить свои часы за неделю и норму</color>");
+            sb.AppendLine("  <color=#ffd285>* .overwatch (или .ow)</color>   <color=#c2c2c2>-- Включить/выключить режим наблюдения</color>");
             sb.AppendLine();
         }
 
-        sb.AppendLine("============================================================");
-        sb.AppendLine(">> Наш Discord сервер: discord.gg/capybara");
-        sb.AppendLine("============================================================");
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
+        sb.AppendLine("<color=#ffa94e>>> Наш Discord сервер: </color><color=#5865f2>discord.gg/capybara</color>");
+        sb.Append("<color=#ffa94e>============================================================</color>");
 
-        return Colorize(sb.ToString());
+        return sb.ToString();
     }
 }
 

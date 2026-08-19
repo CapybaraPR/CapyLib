@@ -26,74 +26,74 @@ public sealed class TopCommand : ICommand
 
         if (list.Count == 0)
         {
-            response = "\nТаблица лидеров пока пуста. Сыграйте раунд, чтобы статистика сохранилась!\n";
+            response = "\n<color=#ffa94e>Таблица лидеров пока пуста. Сыграйте раунд, чтобы статистика сохранилась!</color>\n";
             return true;
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("============================================================");
+        sb.AppendLine();
+        sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
         if (mode == "time" || mode == "время" || mode == "онлайн" || mode == "playtime")
         {
-            sb.AppendLine("              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]");
-            sb.AppendLine("============================================================");
+            sb.AppendLine("<b><color=#ffd285>              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]</color></b>");
+            sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
             var sorted = list.OrderByDescending(p => p.TotalPlaytimeSeconds).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string rankTag = $"[#{rank}]";
+                string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
-                sb.AppendLine($"{rankTag} {name} -- {FormatTime(p.TotalPlaytimeSeconds)} (Раундов: {p.RoundsPlayed})");
+                sb.AppendLine($"{rankTag} <color=#ffffff>{name}</color> <color=#c2c2c2>--</color> <color=#ffd285>{FormatTime(p.TotalPlaytimeSeconds)}</color> <color=#c2c2c2>(Раундов:</color> <color=#58b9ff>{p.RoundsPlayed}</color><color=#c2c2c2>)</color>");
                 rank++;
             }
         }
         else if (mode == "rounds" || mode == "раунды")
         {
-            sb.AppendLine("             [ ТОП-10 ИГРОКОВ ПО РАУНДАМ ]");
-            sb.AppendLine("============================================================");
+            sb.AppendLine("<b><color=#ffd285>             [ ТОП-10 ИГРОКОВ ПО РАУНДАМ ]</color></b>");
+            sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
             var sorted = list.OrderByDescending(p => p.RoundsPlayed).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string rankTag = $"[#{rank}]";
+                string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
-                sb.AppendLine($"{rankTag} {name} -- {p.RoundsPlayed} раундов (Побед: {p.Wins})");
+                sb.AppendLine($"{rankTag} <color=#ffffff>{name}</color> <color=#c2c2c2>--</color> <color=#58b9ff>{p.RoundsPlayed} раундов</color> <color=#c2c2c2>(Побед:</color> <color=#a3e635>{p.Wins}</color><color=#c2c2c2>)</color>");
                 rank++;
             }
         }
         else
         {
-            sb.AppendLine("             [ ТОП-10 ИГРОКОВ ПО УБИЙСТВАМ ]");
-            sb.AppendLine("============================================================");
+            sb.AppendLine("<b><color=#ffd285>             [ ТОП-10 ИГРОКОВ ПО УБИЙСТВАМ ]</color></b>");
+            sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
             var sorted = list.OrderByDescending(p => p.Kills).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string rankTag = $"[#{rank}]";
+                string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
                 double kd = p.Deaths > 0 ? (double)p.Kills / p.Deaths : p.Kills;
-                sb.AppendLine($"{rankTag} {name} -- {p.Kills} убийств (K/D: {kd:F2} | {FormatTime(p.TotalPlaytimeSeconds)})");
+                sb.AppendLine($"{rankTag} <color=#ffffff>{name}</color> <color=#c2c2c2>--</color> <color=#a3e635>{p.Kills} убийств</color> <color=#c2c2c2>(K/D:</color> <color=#ffd285>{kd:F2}</color> <color=#c2c2c2>|</color> <color=#58b9ff>{FormatTime(p.TotalPlaytimeSeconds)}</color><color=#c2c2c2>)</color>");
                 rank++;
             }
-            sb.AppendLine("------------------------------------------------------------");
-            sb.AppendLine(">> Совет: используйте '.top time' для просмотра топа по онлайну!");
+            sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");
+            sb.AppendLine("<color=#ffd285>>> Совет: используйте '.top time' для просмотра топа по онлайну!</color>");
         }
 
-        sb.AppendLine("============================================================");
+        sb.Append("<color=#ffa94e>============================================================</color>");
 
-        string colored = HelpMessageBuilder.Colorize(sb.ToString());
         Player? player = Player.Get(sender);
         if (player != null)
         {
-            player.SendConsoleMessage(colored, "white");
+            player.SendConsoleMessage(sb.ToString(), "white");
             response = string.Empty;
             return true;
         }
 
-        response = colored;
+        response = sb.ToString();
         return true;
     }
 
