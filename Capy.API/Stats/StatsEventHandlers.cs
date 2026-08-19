@@ -73,7 +73,33 @@ public class StatsEventHandlers
 
         if (_activeSessions.TryRemove(ev.Player.Id, out var session))
         {
-            if (_config.EnableStatsTracking)
+            try
+            {
+                if (CapyPlugin.Instance?.Database != null && !string.IsNullOrWhiteSpace(session.UserId))
+                {
+                    var playerModel = CapyPlugin.Instance.Database.GetPlayer(session.UserId) ?? new Capy.Core.Database.Models.PlayerDataModel
+                    {
+                        Id = session.UserId,
+                        FirstJoin = session.JoinTime
+                    };
+
+                    playerModel.LastNickname = !string.IsNullOrWhiteSpace(session.Nickname) ? session.Nickname : playerModel.LastNickname;
+                    playerModel.LastIp = !string.IsNullOrWhiteSpace(session.IpAddress) ? session.IpAddress : playerModel.LastIp;
+                    playerModel.Kills += session.Kills;
+                    playerModel.Deaths += session.Deaths;
+                    playerModel.RoundsPlayed += session.RoundsPlayed;
+                    playerModel.TotalPlaytimeSeconds += session.SessionDurationSeconds;
+                    playerModel.LastSeen = DateTime.UtcNow;
+
+                    CapyPlugin.Instance.Database.SavePlayer(playerModel);
+                }
+            }
+            catch (Exception dex)
+            {
+                _log?.Error($"[StatsTracker] Ошибка сохранения статистики игрока: {dex.Message}");
+            }
+
+            if (_config.EnableStatsTracking && !string.IsNullOrWhiteSpace(_config.ApiUrl))
             {
                 var statsPayload = new
                 {
@@ -88,7 +114,7 @@ public class StatsEventHandlers
                 _ = CapyApiClient.PostFireAndForgetAsync($"{_config.ApiUrl.TrimEnd('/')}/stats/update", statsPayload);
             }
 
-            if (_config.EnableAuthLogging)
+            if (_config.EnableAuthLogging && !string.IsNullOrWhiteSpace(_config.ApiUrl))
             {
                 var authPayload = new
                 {

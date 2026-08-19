@@ -15,6 +15,7 @@ namespace Capy.API.DiscordBridge;
 public sealed class StaffService : IDisposable
 {
     private static readonly Regex SteamIdRegex = new(@"^(?:7656\d{13})(?:@steam)?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _sessionStartTimes = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
     private readonly string _dbPath;
     private LiteDatabase? _db;
@@ -26,7 +27,7 @@ public sealed class StaffService : IDisposable
         if (!Directory.Exists(dir))
             Directory.CreateDirectory(dir);
 
-        _dbPath = Path.Combine(dir, "StaffRegistry.db");
+        _dbPath = Path.Combine(dir, "CapyData.db");
         Initialize();
     }
 
@@ -41,7 +42,34 @@ public sealed class StaffService : IDisposable
                 _collection.EnsureIndex(x => x.Id, true);
                 _collection.EnsureIndex(x => x.DiscordUserId, false);
                 _collection.EnsureIndex(x => x.IsActive, false);
-                Log.Info($"[StaffService] База данных персонала успешно инициализирована (Shared mode): {_dbPath}");
+                Log.Info($"[StaffService] База данных персонала успешно инициализирована (CapyData.db, Shared mode): {_dbPath}");
+
+                // Auto-migrate from legacy StaffRegistry.db if present
+                string legacyDbPath = Path.Combine(Path.GetDirectoryName(_dbPath) ?? string.Empty, "StaffRegistry.db");
+                if (File.Exists(legacyDbPath))
+                {
+                    try
+                    {
+                        using (var oldDb = new LiteDatabase($"Filename={legacyDbPath};Connection=shared"))
+                        {
+                            var oldCol = oldDb.GetCollection<StaffMemberModel>("staff");
+                            var oldStaff = oldCol.FindAll().ToList();
+                            if (oldStaff.Count > 0)
+                            {
+                                foreach (var s in oldStaff)
+                                {
+                                    _collection.Upsert(s);
+                                }
+                                Log.Info($"[StaffService] Миграция: {oldStaff.Count} записей персонала успешно перенесены из StaffRegistry.db в единую базу CapyData.db!");
+                            }
+                        }
+                        File.Delete(legacyDbPath);
+                    }
+                    catch (Exception mex)
+                    {
+                        Log.Warn($"[StaffService] Предупреждение миграции StaffRegistry.db: {mex.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -162,6 +190,19 @@ public sealed class StaffService : IDisposable
                         if (!string.IsNullOrWhiteSpace(online.Nickname))
                             st.Nickname = online.Nickname;
                         st.LastSeenUtc = now;
+
+                        if (!_sessionStartTimes.TryGetValue(st.Id, out DateTime startTime))
+                        {
+                            startTime = now;
+                            _sessionStartTimes[st.Id] = startTime;
+                        }
+
+                        long ongoingSeconds = (long)(now - startTime).TotalSeconds;
+                        if (ongoingSeconds > 0)
+                        {
+                            st.WeeklyPlaytimeSeconds += ongoingSeconds;
+                            st.TotalPlaytimeSeconds += ongoingSeconds;
+                        }
                     }
                 }
             }
@@ -323,6 +364,7 @@ public sealed class StaffService : IDisposable
                 staff.Nickname = player.Nickname;
 
             _collection?.Update(staff);
+            _sessionStartTimes[id] = now;
         }
 
         UserGroup? targetGroup = ServerStatic.PermissionsHandler.GetGroup(staff.Group.Trim());
@@ -340,6 +382,7 @@ public sealed class StaffService : IDisposable
     public void OnPlayerLeft(string rawUserId, long sessionSeconds, bool wasDuty)
     {
         string id = NormalizeUserId(rawUserId);
+        _sessionStartTimes.TryRemove(id, out _);
         lock (_sync)
         {
             if (_collection == null) return;
@@ -431,6 +474,7 @@ public sealed class StaffService : IDisposable
                     staff.LastSeenUtc = DateTime.UtcNow;
                     _collection?.Update(staff);
                 }
+                _sessionStartTimes.TryAdd(userId, DateTime.UtcNow);
             }
             catch { }
         }
