@@ -16,6 +16,7 @@ public sealed class StaffService : IDisposable
 {
     private static readonly Regex SteamIdRegex = new(@"^(?:7656\d{13})(?:@steam)?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _sessionStartTimes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _onlineNicknames = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
     private readonly string _dbPath;
     private LiteDatabase? _db;
@@ -131,11 +132,12 @@ public sealed class StaffService : IDisposable
 
     public StaffMemberModel? GetStaffByDiscordId(ulong discordId)
     {
+        if (discordId == 0) return null;
         lock (_sync)
         {
             try
             {
-                if (_collection == null || discordId == 0) return null;
+                if (_collection == null) return null;
                 return _collection.FindOne(x => x.DiscordUserId == discordId && x.IsActive);
             }
             catch (Exception ex)
@@ -178,24 +180,17 @@ public sealed class StaffService : IDisposable
                 }
             }
 
-            // Real-time enrich online players
+            // Real-time enrich online staff from memory cache (0ms latency, thread-safe)
             try
             {
                 DateTime now = DateTime.UtcNow;
                 foreach (var st in list)
                 {
-                    Player? online = Player.List.FirstOrDefault(p => NormalizeUserId(p.UserId) == st.Id);
-                    if (online != null && online.IsConnected && !online.IsHost)
+                    if (_sessionStartTimes.TryGetValue(st.Id, out DateTime startTime))
                     {
-                        if (!string.IsNullOrWhiteSpace(online.Nickname))
-                            st.Nickname = online.Nickname;
                         st.LastSeenUtc = now;
-
-                        if (!_sessionStartTimes.TryGetValue(st.Id, out DateTime startTime))
-                        {
-                            startTime = now;
-                            _sessionStartTimes[st.Id] = startTime;
-                        }
+                        if (_onlineNicknames.TryGetValue(st.Id, out string? nick) && !string.IsNullOrWhiteSpace(nick))
+                            st.Nickname = nick;
 
                         long ongoingSeconds = (long)(now - startTime).TotalSeconds;
                         if (ongoingSeconds > 0)
@@ -361,7 +356,10 @@ public sealed class StaffService : IDisposable
             CheckWeeklyReset(staff, now);
             staff.LastSeenUtc = now;
             if (!string.IsNullOrWhiteSpace(player.Nickname))
+            {
                 staff.Nickname = player.Nickname;
+                _onlineNicknames[id] = player.Nickname;
+            }
 
             _collection?.Update(staff);
             _sessionStartTimes[id] = now;
@@ -383,6 +381,7 @@ public sealed class StaffService : IDisposable
     {
         string id = NormalizeUserId(rawUserId);
         _sessionStartTimes.TryRemove(id, out _);
+        _onlineNicknames.TryRemove(id, out _);
         lock (_sync)
         {
             if (_collection == null) return;
@@ -475,6 +474,8 @@ public sealed class StaffService : IDisposable
                     _collection?.Update(staff);
                 }
                 _sessionStartTimes.TryAdd(userId, DateTime.UtcNow);
+                if (!string.IsNullOrWhiteSpace(player.Nickname))
+                    _onlineNicknames[userId] = player.Nickname;
             }
             catch { }
         }
