@@ -38,4 +38,9 @@ public static class RoleTypeIdExtensions {
         };
         return useColors ? ret : Regex.Replace(ret, "<[^<>]*>", "");
     }
+
+    public static string Translate(this RoleTypeId roleType, bool useColors = false) => roleType.TranslatedRoleType(useColors);
+    public static string GetTranslation(this RoleTypeId roleType, bool useColors = false) => roleType.TranslatedRoleType(useColors);
+    public static string ToRussian(this RoleTypeId roleType, bool useColors = false) => roleType.TranslatedRoleType(useColors);
+    public static string GetRussianName(this RoleTypeId roleType, bool useColors = false) => roleType.TranslatedRoleType(useColors);
 }

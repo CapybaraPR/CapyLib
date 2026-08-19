@@ -65,4 +65,9 @@ public static class ItemTypeExtensions {
         };
         return useColors ? ret : Regex.Replace(ret, "<[^<>]*>", "");
     }
+
+    public static string Translate(this ItemType itemType, bool useColors = false) => itemType.TranslateItemType(useColors);
+    public static string GetTranslation(this ItemType itemType, bool useColors = false) => itemType.TranslateItemType(useColors);
+    public static string ToRussian(this ItemType itemType, bool useColors = false) => itemType.TranslateItemType(useColors);
+    public static string GetRussianName(this ItemType itemType, bool useColors = false) => itemType.TranslateItemType(useColors);
 }
