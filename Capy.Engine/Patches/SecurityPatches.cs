@@ -6,12 +6,36 @@ using Utils;
 
 namespace Capy.Engine.Patches;
 
+[HarmonyPatch(typeof(global::RemoteAdmin.CommandProcessor), "ProcessQuery")]
+internal static class CommandProcessorHelpPatch
+{
+    internal static bool Prefix(string q, CommandSender sender, ref string __result)
+    {
+        if (string.IsNullOrWhiteSpace(q)) return true;
+        string trimmed = q.Trim();
+        if (trimmed.Equals("help", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals(".help", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("хелп", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals(".хелп", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("помощь", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals(".помощь", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("команды", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals(".команды", StringComparison.OrdinalIgnoreCase))
+        {
+            __result = Capy.Commands.HelpMessageBuilder.Build(sender);
+            return false;
+        }
+        return true;
+    }
+}
+
 [HarmonyPatch(typeof(CommandSystem.Commands.Console.LineHelpCommand), nameof(CommandSystem.Commands.Console.LineHelpCommand.Execute))]
 internal static class LineHelpCommandPatch
 {
-    internal static bool Prefix(ArraySegment<string> arguments, ICommandSender sender, ref string response)
+    internal static bool Prefix(ArraySegment<string> arguments, ICommandSender sender, ref string response, ref bool __result)
     {
         response = Capy.Commands.HelpMessageBuilder.Build(sender);
+        __result = true;
         return false;
     }
 }
@@ -19,9 +43,10 @@ internal static class LineHelpCommandPatch
 [HarmonyPatch(typeof(HelpCommand), nameof(HelpCommand.Execute))]
 internal static class HelpCommandPatch
 {
-    internal static bool Prefix(HelpCommand __instance, ArraySegment<string> arguments, ICommandSender sender, ref string response)
+    internal static bool Prefix(HelpCommand __instance, ArraySegment<string> arguments, ICommandSender sender, ref string response, ref bool __result)
     {
         response = Capy.Commands.HelpMessageBuilder.Build(sender);
+        __result = true;
         return false;
     }
 }
