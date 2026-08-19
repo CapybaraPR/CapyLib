@@ -16,7 +16,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
     public override string Name => "CapyLib";
     public override string Author => "CapybaraPR";
     public override string Prefix => "capylib";
-    public override Version Version => new(1, 2, 0);
+    public override Version Version => new(1, 3, 0);
 
     public static CapyPlugin Instance { get; private set; } = null!;
 
