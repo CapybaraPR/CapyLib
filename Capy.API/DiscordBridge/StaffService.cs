@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -36,12 +36,12 @@ public sealed class StaffService : IDisposable
         {
             try
             {
-                _db = new LiteDatabase(_dbPath);
+                _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
                 _collection = _db.GetCollection<StaffMemberModel>("staff");
                 _collection.EnsureIndex(x => x.Id, true);
                 _collection.EnsureIndex(x => x.DiscordUserId, false);
                 _collection.EnsureIndex(x => x.IsActive, false);
-                Log.Info($"[StaffService] База данных персонала успешно инициализирована: {_dbPath}");
+                Log.Info($"[StaffService] База данных персонала успешно инициализирована (Shared mode): {_dbPath}");
             }
             catch (Exception ex)
             {
@@ -87,9 +87,17 @@ public sealed class StaffService : IDisposable
     {
         lock (_sync)
         {
-            if (_collection == null) return null;
-            string id = NormalizeUserId(userId);
-            return _collection.FindById(id);
+            try
+            {
+                if (_collection == null) return null;
+                string id = NormalizeUserId(userId);
+                return _collection.FindById(id);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[StaffService] Ошибка GetStaff({userId}): {ex.Message}");
+                return null;
+            }
         }
     }
 
@@ -97,8 +105,16 @@ public sealed class StaffService : IDisposable
     {
         lock (_sync)
         {
-            if (_collection == null || discordId == 0) return null;
-            return _collection.FindOne(x => x.DiscordUserId == discordId && x.IsActive);
+            try
+            {
+                if (_collection == null || discordId == 0) return null;
+                return _collection.FindOne(x => x.DiscordUserId == discordId && x.IsActive);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[StaffService] Ошибка GetStaffByDiscordId({discordId}): {ex.Message}");
+                return null;
+            }
         }
     }
 
@@ -106,10 +122,32 @@ public sealed class StaffService : IDisposable
     {
         lock (_sync)
         {
-            if (_collection == null) return new List<StaffMemberModel>();
-            if (activeOnly)
-                return _collection.Find(x => x.IsActive).ToList();
-            return _collection.FindAll().ToList();
+            try
+            {
+                if (_collection == null) return new List<StaffMemberModel>();
+                if (activeOnly)
+                    return _collection.Find(x => x.IsActive).ToList();
+                return _collection.FindAll().ToList();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[StaffService] Ошибка GetAllStaff: {ex.Message}");
+                try
+                {
+                    // Re-initialize shared connection and retry once
+                    _db?.Dispose();
+                    _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
+                    _collection = _db.GetCollection<StaffMemberModel>("staff");
+                    if (activeOnly)
+                        return _collection.Find(x => x.IsActive).ToList();
+                    return _collection.FindAll().ToList();
+                }
+                catch (Exception retryEx)
+                {
+                    Log.Error($"[StaffService] Повторная попытка чтения не удалась: {retryEx.Message}");
+                    return new List<StaffMemberModel>();
+                }
+            }
         }
     }
 

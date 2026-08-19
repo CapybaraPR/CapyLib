@@ -26,10 +26,10 @@ public class LiteDbProvider : IDatabaseProvider
     {
         try
         {
-            _db = new LiteDatabase(_dbPath);
+            _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
             _players = _db.GetCollection<PlayerDataModel>("players");
             _players.EnsureIndex(x => x.Id, true);
-            Log.Info($"[LiteDbProvider] База данных LiteDB успешно инициализирована: {_dbPath}");
+            Log.Info($"[LiteDbProvider] База данных LiteDB успешно инициализирована (Shared mode): {_dbPath}");
         }
         catch (Exception ex)
         {
