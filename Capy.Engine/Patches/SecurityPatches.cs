@@ -6,6 +6,16 @@ using Utils;
 
 namespace Capy.Engine.Patches;
 
+[HarmonyPatch(typeof(CommandSystem.Commands.Console.LineHelpCommand), nameof(CommandSystem.Commands.Console.LineHelpCommand.Execute))]
+internal static class LineHelpCommandPatch
+{
+    internal static bool Prefix(ArraySegment<string> arguments, ICommandSender sender, ref string response)
+    {
+        response = Capy.Commands.HelpMessageBuilder.Build(sender);
+        return false;
+    }
+}
+
 [HarmonyPatch(typeof(HelpCommand), nameof(HelpCommand.Execute))]
 internal static class HelpCommandPatch
 {
