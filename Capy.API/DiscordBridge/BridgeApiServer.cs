@@ -334,12 +334,19 @@ public sealed class BridgeApiServer : IDisposable
         RespondJson(response, HttpStatusCode.OK, new StaffListResponse { Success = true, Staff = staff });
     }
 
+    private static T? DeserializeBody<T>(byte[] bodyBytes)
+    {
+        if (bodyBytes == null || bodyBytes.Length == 0) return default;
+        string json = Encoding.UTF8.GetString(bodyBytes);
+        return JsonSerializer.Deserialize<T>(json, JsonOptions);
+    }
+
     private async Task HandleAddStaffAsync(HttpListenerResponse response, byte[] bodyBytes)
     {
         StaffAddRequest? req;
         try
         {
-            req = JsonSerializer.Deserialize<StaffAddRequest>(bodyBytes, JsonOptions);
+            req = DeserializeBody<StaffAddRequest>(bodyBytes);
         }
         catch (Exception ex)
         {
@@ -382,7 +389,7 @@ public sealed class BridgeApiServer : IDisposable
         StaffRemoveRequest? req;
         try
         {
-            req = JsonSerializer.Deserialize<StaffRemoveRequest>(bodyBytes, JsonOptions);
+            req = DeserializeBody<StaffRemoveRequest>(bodyBytes);
         }
         catch (Exception ex)
         {
@@ -471,7 +478,7 @@ public sealed class BridgeApiServer : IDisposable
         CommandRequest? req;
         try
         {
-            req = JsonSerializer.Deserialize<CommandRequest>(bodyBytes, JsonOptions);
+            req = DeserializeBody<CommandRequest>(bodyBytes);
         }
         catch (Exception ex)
         {
@@ -552,7 +559,7 @@ public sealed class BridgeApiServer : IDisposable
         LinkCodeRequest? req;
         try
         {
-            req = JsonSerializer.Deserialize<LinkCodeRequest>(bodyBytes, JsonOptions);
+            req = DeserializeBody<LinkCodeRequest>(bodyBytes);
         }
         catch (Exception ex)
         {
@@ -588,7 +595,7 @@ public sealed class BridgeApiServer : IDisposable
         LinkRoleSyncRequest? req;
         try
         {
-            req = JsonSerializer.Deserialize<LinkRoleSyncRequest>(bodyBytes, JsonOptions);
+            req = DeserializeBody<LinkRoleSyncRequest>(bodyBytes);
         }
         catch (Exception ex)
         {
