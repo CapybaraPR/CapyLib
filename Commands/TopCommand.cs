@@ -26,60 +26,61 @@ public sealed class TopCommand : ICommand
 
         if (list.Count == 0)
         {
-            response = "Таблица лидеров пока пуста. Сыграйте раунд, чтобы статистика сохранилась!";
+            response = "\nТаблица лидеров пока пуста. Сыграйте раунд, чтобы статистика сохранилась!\n";
             return true;
         }
 
         var sb = new StringBuilder();
+        sb.AppendLine();
         sb.AppendLine("============================================================");
 
         if (mode == "time" || mode == "время" || mode == "онлайн" || mode == "playtime")
         {
-            sb.AppendLine("              ⏱️ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ⏱️");
+            sb.AppendLine("              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]");
             sb.AppendLine("============================================================");
 
             var sorted = list.OrderByDescending(p => p.TotalPlaytimeSeconds).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string medal = rank switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{rank}" };
+                string rankTag = $"[#{rank}]";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
-                sb.AppendLine($"{medal} {name} — {FormatTime(p.TotalPlaytimeSeconds)} (Раундов: {p.RoundsPlayed})");
+                sb.AppendLine($"{rankTag} {name} -- {FormatTime(p.TotalPlaytimeSeconds)} (Раундов: {p.RoundsPlayed})");
                 rank++;
             }
         }
         else if (mode == "rounds" || mode == "раунды")
         {
-            sb.AppendLine("             🎮 ТОП-10 ИГРОКОВ ПО РАУНДАМ 🎮");
+            sb.AppendLine("             [ ТОП-10 ИГРОКОВ ПО РАУНДАМ ]");
             sb.AppendLine("============================================================");
 
             var sorted = list.OrderByDescending(p => p.RoundsPlayed).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string medal = rank switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{rank}" };
+                string rankTag = $"[#{rank}]";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
-                sb.AppendLine($"{medal} {name} — {p.RoundsPlayed} раундов (Побед: {p.Wins})");
+                sb.AppendLine($"{rankTag} {name} -- {p.RoundsPlayed} раундов (Побед: {p.Wins})");
                 rank++;
             }
         }
         else
         {
-            sb.AppendLine("             ⚔️ ТОП-10 ИГРОКОВ ПО УБИЙСТВАМ ⚔️");
+            sb.AppendLine("             [ ТОП-10 ИГРОКОВ ПО УБИЙСТВАМ ]");
             sb.AppendLine("============================================================");
 
             var sorted = list.OrderByDescending(p => p.Kills).Take(10).ToList();
             int rank = 1;
             foreach (var p in sorted)
             {
-                string medal = rank switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{rank}" };
+                string rankTag = $"[#{rank}]";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
                 double kd = p.Deaths > 0 ? (double)p.Kills / p.Deaths : p.Kills;
-                sb.AppendLine($"{medal} {name} — {p.Kills} убийств (K/D: {kd:F2} | {FormatTime(p.TotalPlaytimeSeconds)})");
+                sb.AppendLine($"{rankTag} {name} -- {p.Kills} убийств (K/D: {kd:F2} | {FormatTime(p.TotalPlaytimeSeconds)})");
                 rank++;
             }
             sb.AppendLine("------------------------------------------------------------");
-            sb.AppendLine("💡 Совет: используйте '.top time' для просмотра топа по онлайну!");
+            sb.AppendLine(">> Совет: используйте '.top time' для просмотра топа по онлайну!");
         }
 
         sb.AppendLine("============================================================");

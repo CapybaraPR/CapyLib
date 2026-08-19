@@ -13,33 +13,34 @@ public static class HelpMessageBuilder
         bool isStaff = player != null && (player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName));
 
         var sb = new StringBuilder();
+        sb.AppendLine();
         sb.AppendLine("============================================================");
-        sb.AppendLine("              🌿 КАПИБАРА SCP:SL • СПИСОК КОМАНД 🌿");
+        sb.AppendLine("              [ КАПИБАРА SCP:SL • СПИСОК КОМАНД ]");
         sb.AppendLine("============================================================");
         sb.AppendLine();
-        sb.AppendLine("📌 ОСНОВНЫЕ КОМАНДЫ:");
-        sb.AppendLine("  • .stats                 — Ваша игровая статистика (K/D, раунды, онлайн)");
-        sb.AppendLine("  • .top                   — Топ-10 игроков по убийствам");
-        sb.AppendLine("  • .top time              — Топ-10 игроков по наигранному времени");
-        sb.AppendLine("  • .linkdiscord <код>     — Привязать Discord по коду из бота (/steamsl)");
-        sb.AppendLine("  • .help                  — Показать эту справку");
+        sb.AppendLine(">> ОСНОВНЫЕ КОМАНДЫ ДЛЯ ИГРОКОВ:");
+        sb.AppendLine("  * .stats                 -- Личная статистика (K/D, раунды, онлайн)");
+        sb.AppendLine("  * .top                   -- Топ-10 игроков сервера по фрагам");
+        sb.AppendLine("  * .top time              -- Топ-10 игроков по наигранному времени");
+        sb.AppendLine("  * .linkdiscord <код>     -- Привязать Discord к аккаунту (/steamsl)");
+        sb.AppendLine("  * .help                  -- Показать эту справку");
         sb.AppendLine();
-        sb.AppendLine("🏷️ ТЕГИ И ОТОБРАЖЕНИЕ:");
-        sb.AppendLine("  • .showtag               — Показать персональный / клановый тег");
-        sb.AppendLine("  • .hidetag               — Скрыть свой тег над головой");
-        sb.AppendLine("  • .globaltag             — Показать глобальный значок");
+        sb.AppendLine(">> ТЕГИ И ОТОБРАЖЕНИЕ:");
+        sb.AppendLine("  * .showtag               -- Показать свой тег над головой");
+        sb.AppendLine("  * .hidetag               -- Скрыть свой тег над головой");
+        sb.AppendLine("  * .globaltag             -- Показать глобальный значок");
         sb.AppendLine();
 
         if (isStaff)
         {
-            sb.AppendLine("🛡️ ДЛЯ АДМИНИСТРАЦИИ:");
-            sb.AppendLine("  • .capy staff            — Проверить свои часы за неделю и норму");
-            sb.AppendLine("  • .overwatch (или .ow)   — Включить / выключить режим наблюдения");
+            sb.AppendLine(">> ДЛЯ АДМИНИСТРАЦИИ (STAFF):");
+            sb.AppendLine("  * .capy staff            -- Проверить свои часы за неделю и норму");
+            sb.AppendLine("  * .overwatch (или .ow)   -- Включить/выключить режим наблюдения");
             sb.AppendLine();
         }
 
         sb.AppendLine("============================================================");
-        sb.AppendLine("🌐 Наш Discord: discord.gg/capybara");
+        sb.AppendLine(">> Наш Discord сервер: discord.gg/capybara");
         sb.AppendLine("============================================================");
 
         return sb.ToString();

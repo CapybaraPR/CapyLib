@@ -29,7 +29,6 @@ public sealed class StatsCommand : ICommand
         string targetUserId = player.UserId;
         string targetNickname = player.Nickname;
 
-        // If argument is passed, search player by Nickname, PlayerId or SteamID
         if (arguments.Count > 0 && arguments.Array != null)
         {
             string query = arguments.Array[arguments.Offset].Trim();
@@ -69,26 +68,27 @@ public sealed class StatsCommand : ICommand
         string cleanId = targetUserId.Replace("@steam", "").Replace("@discord", "");
 
         var sb = new StringBuilder();
+        sb.AppendLine();
         sb.AppendLine("============================================================");
-        sb.AppendLine($"           📊 СТАТИСТИКА ИГРОКА: {targetNickname} 📊");
+        sb.AppendLine($"           [ СТАТИСТИКА ИГРОКА: {targetNickname} ]");
         sb.AppendLine("============================================================");
-        sb.AppendLine($"🆔 SteamID64: {cleanId}");
-        sb.AppendLine($"⏱️ Общий онлайн: {FormatTime(playtimeSeconds)}");
-        sb.AppendLine($"🎮 Сыграно раундов: {rounds}");
-        sb.AppendLine($"⚔️ Убийств: {kills} | Смертей: {deaths} | K/D: {kd:F2}");
-        sb.AppendLine($"🏆 Побед: {wins}");
-        sb.AppendLine($"📅 Первый вход: {firstJoin:dd.MM.yyyy}");
+        sb.AppendLine($"* SteamID64: {cleanId}");
+        sb.AppendLine($"* Общий онлайн: {FormatTime(playtimeSeconds)}");
+        sb.AppendLine($"* Сыграно раундов: {rounds}");
+        sb.AppendLine($"* Убийств: {kills} | Смертей: {deaths} | K/D: {kd:F2}");
+        sb.AppendLine($"* Побед: {wins}");
+        sb.AppendLine($"* Первый вход: {firstJoin:dd.MM.yyyy}");
 
         if (staff != null && staff.IsActive)
         {
             int totalPunishments = staff.BansCount + staff.MutesCount + staff.KicksCount;
             sb.AppendLine("------------------------------------------------------------");
-            sb.AppendLine("🛡️ СЛУЖЕБНАЯ ИНФОРМАЦИЯ АДМИНИСТРАЦИИ:");
-            sb.AppendLine($"• Должность: {staff.Group} [{staff.ServerScope.ToUpperInvariant()}]");
-            sb.AppendLine($"• Онлайн за неделю: {FormatTime(staff.WeeklyPlaytimeSeconds)} (Норма: ≥4ч)");
-            sb.AppendLine($"• Выдано наказаний: {totalPunishments} (Банов: {staff.BansCount}, Мутов: {staff.MutesCount}, Киков: {staff.KicksCount})");
+            sb.AppendLine(">> СЛУЖЕБНАЯ ИНФОРМАЦИЯ АДМИНИСТРАЦИИ:");
+            sb.AppendLine($"* Должность: {staff.Group} [{staff.ServerScope.ToUpperInvariant()}]");
+            sb.AppendLine($"* Онлайн за неделю: {FormatTime(staff.WeeklyPlaytimeSeconds)} (Норма: >=4ч)");
+            sb.AppendLine($"* Выдано наказаний: {totalPunishments} (Банов: {staff.BansCount}, Мутов: {staff.MutesCount}, Киков: {staff.KicksCount})");
             if (staff.DiscordUserId != 0)
-                sb.AppendLine($"• Discord: {staff.DiscordUserId}");
+                sb.AppendLine($"* Discord: {staff.DiscordUserId}");
         }
 
         sb.AppendLine("============================================================");
