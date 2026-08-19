@@ -75,7 +75,7 @@ public sealed class DiscordBridgeConfig : IModuleConfig
     public int GameThreadTimeoutSeconds { get; set; } = 8;
 
     [Description("Показывать UserId игроков в ответе API /players.")]
-    public bool IncludePlayerUserIds { get; set; } = false;
+    public bool IncludePlayerUserIds { get; set; } = true;
 
     [Description("Максимальное число событий, удерживаемых в буфере для Discord-бота.")]
     public int MaxBufferedLogEvents { get; set; } = 2000;

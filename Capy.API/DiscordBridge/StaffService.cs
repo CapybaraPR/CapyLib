@@ -122,12 +122,13 @@ public sealed class StaffService : IDisposable
     {
         lock (_sync)
         {
+            List<StaffMemberModel> list;
             try
             {
                 if (_collection == null) return new List<StaffMemberModel>();
-                if (activeOnly)
-                    return _collection.Find(x => x.IsActive).ToList();
-                return _collection.FindAll().ToList();
+                list = activeOnly
+                    ? _collection.Find(x => x.IsActive).ToList()
+                    : _collection.FindAll().ToList();
             }
             catch (Exception ex)
             {
@@ -138,9 +139,9 @@ public sealed class StaffService : IDisposable
                     _db?.Dispose();
                     _db = new LiteDatabase($"Filename={_dbPath};Connection=shared");
                     _collection = _db.GetCollection<StaffMemberModel>("staff");
-                    if (activeOnly)
-                        return _collection.Find(x => x.IsActive).ToList();
-                    return _collection.FindAll().ToList();
+                    list = activeOnly
+                        ? _collection.Find(x => x.IsActive).ToList()
+                        : _collection.FindAll().ToList();
                 }
                 catch (Exception retryEx)
                 {
@@ -148,6 +149,25 @@ public sealed class StaffService : IDisposable
                     return new List<StaffMemberModel>();
                 }
             }
+
+            // Real-time enrich online players
+            try
+            {
+                DateTime now = DateTime.UtcNow;
+                foreach (var st in list)
+                {
+                    Player? online = Player.List.FirstOrDefault(p => NormalizeUserId(p.UserId) == st.Id);
+                    if (online != null && online.IsConnected && !online.IsHost)
+                    {
+                        if (!string.IsNullOrWhiteSpace(online.Nickname))
+                            st.Nickname = online.Nickname;
+                        st.LastSeenUtc = now;
+                    }
+                }
+            }
+            catch { }
+
+            return list;
         }
     }
 
@@ -400,6 +420,19 @@ public sealed class StaffService : IDisposable
                 player.Group = targetGroup;
                 Log.Info($"[StaffService] Онлайн-игроку {player.Nickname} ({userId}) мгновенно назначена группа '{group}'.");
             }
+
+            try
+            {
+                StaffMemberModel? staff = _collection?.FindById(userId);
+                if (staff != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(player.Nickname))
+                        staff.Nickname = player.Nickname;
+                    staff.LastSeenUtc = DateTime.UtcNow;
+                    _collection?.Update(staff);
+                }
+            }
+            catch { }
         }
     }
 

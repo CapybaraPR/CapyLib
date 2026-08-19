@@ -832,7 +832,7 @@ public sealed class BridgeApiServer : IDisposable
                 Id = p.Id,
                 Nickname = p.Nickname ?? "Unknown",
                 Name = p.Nickname ?? "Unknown",
-                UserId = _config.IncludePlayerUserIds ? p.UserId : null,
+                UserId = p.UserId,
                 Role = p.Role.Type.ToString(),
                 Team = p.Role.Team.ToString(),
                 IsAlive = p.IsAlive,
