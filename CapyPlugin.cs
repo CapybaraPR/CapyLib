@@ -22,6 +22,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
 
     public ModuleLoader Loader { get; private set; } = null!;
     public IDatabaseProvider Database { get; private set; } = null!;
+    private HarmonyLib.Harmony? _harmony;
 
     public override void OnEnabled()
     {
@@ -29,6 +30,14 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
 
         // Создание базовых каталогов
         SafeExecute("Directories", EnsureDirectories);
+
+        // 0. Harmony Patches
+        SafeExecute("HarmonyPatches", () =>
+        {
+            _harmony = new HarmonyLib.Harmony($"capylib.patches.{DateTime.UtcNow.Ticks}");
+            _harmony.PatchAll();
+            Log.Info("[CapyLib] Harmony-патчи успешно применены.");
+        });
 
         // 1. Инициализация DRM лицензии
         string licenseKey = GetOrCreateLicenseKey();
@@ -70,6 +79,12 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
 
     public override void OnDisabled()
     {
+        SafeExecute("HarmonyUnpatch", () =>
+        {
+            _harmony?.UnpatchAll(_harmony.Id);
+            _harmony = null;
+        });
+
         SafeExecute("LicenseStop", LicenseManager.Stop);
         SafeExecute("CustomRoles.Disable", CustomRolesManager.UnregisterAll);
         SafeExecute("CustomItems.Disable", CustomItemsManager.UnregisterAll);
