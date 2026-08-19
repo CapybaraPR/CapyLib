@@ -7,9 +7,9 @@ namespace Capy.Commands;
 
 public static class HelpMessageBuilder
 {
-    public static string Build(ICommandSender sender)
+    public static string Build(ICommandSender? sender)
     {
-        Player? player = Player.Get(sender);
+        Player? player = sender != null ? Player.Get(sender) : null;
         bool isStaff = player != null && (player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName));
 
         var sb = new StringBuilder();

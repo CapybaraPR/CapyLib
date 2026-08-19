@@ -6,6 +6,60 @@ using Utils;
 
 namespace Capy.Engine.Patches;
 
+[HarmonyPatch(typeof(global::RemoteAdmin.QueryProcessor), "ProcessGameConsoleQuery")]
+internal static class ProcessGameConsoleQueryPatch
+{
+    internal static bool Prefix(global::RemoteAdmin.QueryProcessor __instance, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return true;
+        string q = query.Trim();
+        if (q.Equals("help", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals(".help", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals("хелп", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals(".хелп", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals("помощь", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals(".помощь", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals("команды", StringComparison.OrdinalIgnoreCase) ||
+            q.Equals(".команды", StringComparison.OrdinalIgnoreCase))
+        {
+            Exiled.API.Features.Player? player = Exiled.API.Features.Player.Get(__instance.gameObject);
+            string msg = Capy.Commands.HelpMessageBuilder.Build(player?.Sender);
+            player?.SendConsoleMessage(msg, "green");
+            return false;
+        }
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(global::RemoteAdmin.QueryProcessor), "ParseCommandsToStruct")]
+internal static class ParseCommandsToStructPatch
+{
+    private static readonly HashSet<string> IgnoredCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "audiopooldebug",
+        "srvcfg",
+        "contact",
+        "hello",
+        "exiledtag",
+        "useability",
+        "groups"
+    };
+
+    internal static void Postfix(ref global::RemoteAdmin.QueryProcessor.CommandData[] __result)
+    {
+        if (__result == null) return;
+        var filtered = new List<global::RemoteAdmin.QueryProcessor.CommandData>();
+        foreach (var cmd in __result)
+        {
+            if (!string.IsNullOrEmpty(cmd.Command) && IgnoredCommands.Contains(cmd.Command))
+                continue;
+
+            filtered.Add(cmd);
+        }
+        __result = filtered.ToArray();
+    }
+}
+
 [HarmonyPatch(typeof(global::RemoteAdmin.CommandProcessor), "ProcessQuery")]
 internal static class CommandProcessorHelpPatch
 {
