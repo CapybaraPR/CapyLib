@@ -304,3 +304,48 @@ public sealed class GrabCommand : ICommand
         return true;
     }
 }
+
+/// <summary>
+/// Команда получения текущих мировых и комнатных координат (для точной настройки спавнов).
+/// </summary>
+[CommandHandler(typeof(ClientCommandHandler))]
+[CommandHandler(typeof(RemoteAdminCommandHandler))]
+public sealed class PosCommand : ICommand
+{
+    public string Command => "mypos";
+    public string[] Aliases => new[] { "roompos", "getpos", "cpos" };
+    public string Description => "Отображает точные координаты игрока и локальное смещение относительно текущей комнаты.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        Player? player = Player.Get(sender);
+        if (player == null)
+        {
+            response = "Команда доступна только игрокам.";
+            return false;
+        }
+
+        Vector3 worldPos = player.Position;
+        Vector3 worldRot = player.Rotation.eulerAngles;
+        var room = player.CurrentRoom;
+
+        if (room != null)
+        {
+            Vector3 localPos = Quaternion.Inverse(room.Rotation) * (worldPos - room.Position);
+            Vector3 localRot = (Quaternion.Inverse(room.Rotation) * player.Rotation).eulerAngles;
+
+            response = $"\n<color=#38bdf8><b>📍 === [ Координаты игрока ] ===</b></color>\n" +
+                       $"Комната: <color=#a3e635><b>{room.Type}</b></color> (Зона: {room.Zone})\n" +
+                       $"Мировые (World): <color=#fcd34d>X: {worldPos.x:F3}, Y: {worldPos.y:F3}, Z: {worldPos.z:F3}</color>\n" +
+                       $"<b>Смещение в комнате (Local Offset):</b>\n" +
+                       $"<color=#67e8f9><b>X: {localPos.x:F3}, Y: {localPos.y:F3}, Z: {localPos.z:F3}</b></color>\n" +
+                       $"Поворот (Local Rot): <color=#f472b6>X: {localRot.x:F1}, Y: {localRot.y:F1}, Z: {localRot.z:F1}</color>";
+            return true;
+        }
+
+        response = $"\n<color=#38bdf8><b>📍 Координаты (Вне комнат):</b></color>\n" +
+                   $"<color=#fcd34d>X: {worldPos.x:F3}, Y: {worldPos.y:F3}, Z: {worldPos.z:F3}</color>";
+        return true;
+    }
+}
+
