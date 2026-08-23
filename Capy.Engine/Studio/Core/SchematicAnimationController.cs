@@ -37,6 +37,14 @@ public sealed class SchematicAnimationController
         return new SchematicAnimationController(schematic);
     }
 
+    /// <summary>
+    /// Убирает схематику из реестра (вызывается при Destroy, чтобы не копить мёртвые ссылки).
+    /// </summary>
+    public static void Unregister(SchematicObject schematic)
+    {
+        Registry.Remove(schematic);
+    }
+
     public void Play(string stateName, int animatorIndex = 0)
     {
         if (animatorIndex >= 0 && animatorIndex < Animators.Count)

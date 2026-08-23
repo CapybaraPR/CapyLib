@@ -301,7 +301,10 @@ public sealed class GrabCommand : ICommand
         }
 
         string? targetName = arguments.Count > 0 ? arguments.At(0) : null;
-        var state = new ToolGunState();
+
+        // ВАЖНО: берём общее состояние игрока, а не новый объект —
+        // иначе захваченный объект нельзя поставить/повернуть через бинды и HUD.
+        var state = CapyToolGun.GetOrCreateState(player);
 
         if (CapyToolGun.TryStartGrab(player, state, targetName))
         {

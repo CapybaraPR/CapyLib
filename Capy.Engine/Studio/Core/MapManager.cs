@@ -80,6 +80,11 @@ public static class MapManager
                 return false;
             }
 
+            // Предотвращаем дублирование: снимаем предыдущую карту перед загрузкой новой
+            int cleared = ClearCurrentMap();
+            if (cleared > 0)
+                Log.Info($"[CapyStudio] Перед загрузкой карты '{mapName}' выгружена предыдущая ({cleared} объектов).");
+
             int spawnedCount = 0;
 
             // 1. Спавн схематик, привязанных к типам комнат
@@ -138,9 +143,21 @@ public static class MapManager
         int count = ActiveMapObjects.Count;
         foreach (var obj in ActiveMapObjects)
         {
-            try { obj.Destroy(); } catch { }
+            try { SchematicLoader.RemoveInstance(obj); } catch { }
         }
         ActiveMapObjects.Clear();
         return count;
+    }
+
+    /// <summary>
+    /// Убирает уничтоженные вне MapManager'а схематики из списка объектов карты
+    /// (например, при .schem clear / SchematicLoader.DestroyAll), чтобы список не протухал.
+    /// </summary>
+    internal static void DetachDestroyed(IEnumerable<SchematicObject> destroyed)
+    {
+        if (destroyed == null) return;
+
+        var set = new HashSet<SchematicObject>(destroyed);
+        ActiveMapObjects.RemoveAll(o => set.Contains(o));
     }
 }

@@ -93,6 +93,9 @@ public static class AssKeybinds
             }
 
             ServerSpecificSettingsSync.DefinedSettings = existingSettings.ToArray();
+
+            // Снимаем старую подписку перед добавлением — защита от дублей при перезагрузке плагина
+            ServerSpecificSettingsSync.ServerOnSettingValueReceived -= OnServerSettingValueReceived;
             ServerSpecificSettingsSync.ServerOnSettingValueReceived += OnServerSettingValueReceived;
 
             Log.Info($"[AssKeybinds] Зарегистрировано {RegisteredKeybinds.Count} серверных клавиш в ServerSpecificSettings!");
@@ -100,6 +103,23 @@ public static class AssKeybinds
         catch (Exception ex)
         {
             Log.Error($"[AssKeybinds] Ошибка инициализации серверных клавиш: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Снимает подписку на события ServerSpecificSettings (вызывается при выключении плагина).
+    /// </summary>
+    public static void Unregister()
+    {
+        try
+        {
+            ServerSpecificSettingsSync.ServerOnSettingValueReceived -= OnServerSettingValueReceived;
+            RegisteredKeybinds.Clear();
+            IdToKeybindMap.Clear();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[AssKeybinds] Ошибка отписки серверных клавиш: {ex}");
         }
     }
 

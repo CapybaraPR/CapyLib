@@ -17,7 +17,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
     public override string Name => "CapyLib";
     public override string Author => "CapybaraPR";
     public override string Prefix => "capylib";
-    public override Version Version => new(1, 3, 1);
+    public override Version Version => new(1, 4, 0);
 
     public static CapyPlugin Instance { get; private set; } = null!;
 
@@ -95,6 +95,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
             Capy.Engine.Studio.Core.MapManager.ClearCurrentMap();
             Capy.Engine.Studio.Core.SchematicLoader.DestroyAll();
         });
+        SafeExecute("AssKeybinds.Unregister", Capy.Engine.ServerSpecific.AssKeybinds.Unregister);
         SafeExecute("HudModule.Disable", Capy.Engine.Hud.HudModule.Disable);
         SafeExecute("PlayerStateCleaner", PlayerStateCleaner.Shutdown);
         SafeExecute("CustomRoles.Disable", CustomRolesManager.UnregisterAll);

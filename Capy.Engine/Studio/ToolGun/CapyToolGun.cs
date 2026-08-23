@@ -71,8 +71,28 @@ public sealed class ToolGunState
 public static class CapyToolGun
 {
     private static readonly ConcurrentDictionary<int, ToolGunState> States = new();
+    private static readonly ConcurrentDictionary<int, DateTime> LastPrimaryAction = new();
+    private static readonly ConcurrentDictionary<int, DateTime> LastSecondaryAction = new();
+    private const double ActionDedupWindowMs = 150;
+
     private static readonly PrimitiveType[] AvailablePrimitives = { PrimitiveType.Cube, PrimitiveType.Sphere, PrimitiveType.Cylinder, PrimitiveType.Capsule, PrimitiveType.Quad };
     private static readonly string[] AvailableColors = { "#FFFFFF", "#FF3333", "#33FF33", "#3388FF", "#FFAA00", "#AA33FF", "#825228", "#333333" };
+
+    /// <summary>
+    /// Гасит дубли: одно физическое нажатие ЛКМ/ПКМ приходит и как событие оружия (EXILED),
+    /// и как серверный SS-бинд. Второе срабатывание в пределах окна игнорируется.
+    /// </summary>
+    private static bool IsDuplicatePress(ConcurrentDictionary<int, DateTime> map, int playerId)
+    {
+        DateTime now = DateTime.UtcNow;
+        DateTime last = map.GetOrAdd(playerId, DateTime.MinValue);
+
+        if ((now - last).TotalMilliseconds < ActionDedupWindowMs)
+            return true;
+
+        map[playerId] = now;
+        return false;
+    }
 
     public static void Initialize()
     {
@@ -90,6 +110,7 @@ public static class CapyToolGun
     public static void Unregister()
     {
         AssKeybinds.OnKeybindPressed -= OnKeybindPressed;
+        ItemHudPanel.ExternalItemHudProvider -= GetToolGunHudText;
         Exiled.Events.Handlers.Player.Shooting -= OnShooting;
         Exiled.Events.Handlers.Player.DryfiringWeapon -= OnDryfiringWeapon;
         Exiled.Events.Handlers.Player.AimingDownSight -= OnAimingDownSight;
@@ -103,6 +124,16 @@ public static class CapyToolGun
                 Timing.KillCoroutines(state.GrabCoroutine);
         }
         States.Clear();
+        LastPrimaryAction.Clear();
+        LastSecondaryAction.Clear();
+    }
+
+    /// <summary>
+    /// Возвращает общее (разделяемое между командами/биндами/HUD) состояние ToolGun игрока.
+    /// </summary>
+    public static ToolGunState GetOrCreateState(Player player)
+    {
+        return States.GetOrAdd(player.Id, _ => new ToolGunState());
     }
 
     public static bool IsHoldingToolGun(Player? player)
@@ -143,24 +174,25 @@ public static class CapyToolGun
         if (!IsHoldingToolGun(ev.Player)) return;
 
         ev.IsAllowed = false;
-        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
-        ExecutePrimaryAction(ev.Player, state);
+        if (IsDuplicatePress(LastPrimaryAction, ev.Player.Id)) return;
+        ExecutePrimaryAction(ev.Player, GetOrCreateState(ev.Player));
     }
 
     private static void OnDryfiringWeapon(DryfiringWeaponEventArgs ev)
     {
         if (!IsHoldingToolGun(ev.Player)) return;
 
-        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
-        ExecutePrimaryAction(ev.Player, state);
+        ev.IsAllowed = false;
+        if (IsDuplicatePress(LastPrimaryAction, ev.Player.Id)) return;
+        ExecutePrimaryAction(ev.Player, GetOrCreateState(ev.Player));
     }
 
     private static void OnAimingDownSight(AimingDownSightEventArgs ev)
     {
         if (!IsHoldingToolGun(ev.Player)) return;
 
-        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
-        ExecuteSecondaryAction(ev.Player, state);
+        if (IsDuplicatePress(LastSecondaryAction, ev.Player.Id)) return;
+        ExecuteSecondaryAction(ev.Player, GetOrCreateState(ev.Player));
     }
 
     private static void OnReloadingWeapon(ReloadingWeaponEventArgs ev)
@@ -216,10 +248,12 @@ public static class CapyToolGun
         switch (keybind)
         {
             case CustomKeybind.Lmb:
+                if (IsDuplicatePress(LastPrimaryAction, player.Id)) return;
                 ExecutePrimaryAction(player, state);
                 break;
 
             case CustomKeybind.Rmb:
+                if (IsDuplicatePress(LastSecondaryAction, player.Id)) return;
                 ExecuteSecondaryAction(player, state);
                 break;
 

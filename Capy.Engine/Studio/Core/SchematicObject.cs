@@ -154,6 +154,8 @@ public sealed class SchematicObject
         if (IsDestroyed) return;
         IsDestroyed = true;
 
+        SchematicAnimationController.Unregister(this);
+
         foreach (var prim in SpawnedPrimitives)
         {
             try { prim?.Destroy(); } catch { }

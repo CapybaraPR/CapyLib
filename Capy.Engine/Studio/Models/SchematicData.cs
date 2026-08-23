@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using AdminToys;
 using UnityEngine;
@@ -76,9 +77,14 @@ public sealed class BlockData
         {
             if (val is JsonElement je)
             {
-                if (je.ValueKind == JsonValueKind.Number && je.TryGetInt32(out int num))
-                    return (PrimitiveType)num;
-                if (int.TryParse(je.GetString(), out int parsedStr))
+                if (je.ValueKind == JsonValueKind.Number)
+                {
+                    if (je.TryGetInt32(out int num))
+                        return (PrimitiveType)num;
+                    if (je.TryGetSingle(out float frac))
+                        return (PrimitiveType)(int)frac;
+                }
+                if (je.ValueKind == JsonValueKind.String && int.TryParse(je.GetString(), out int parsedStr))
                     return (PrimitiveType)parsedStr;
             }
             if (val is long l) return (PrimitiveType)(int)l;
@@ -92,7 +98,10 @@ public sealed class BlockData
     {
         if (Properties.TryGetValue("Color", out var val) && val != null)
         {
-            string hex = (val is JsonElement je ? je.GetString() : val.ToString())?.Trim() ?? string.Empty;
+            if (val is JsonElement je && je.ValueKind != JsonValueKind.String)
+                return Color.white;
+
+            string hex = val.ToString()?.Trim() ?? string.Empty;
             if (!hex.StartsWith("#") && (hex.Length == 6 || hex.Length == 8))
                 hex = "#" + hex;
 
@@ -108,9 +117,14 @@ public sealed class BlockData
         {
             if (val is JsonElement je)
             {
-                if (je.ValueKind == JsonValueKind.Number && je.TryGetInt32(out int num))
-                    return (PrimitiveFlags)(byte)num;
-                if (byte.TryParse(je.GetString(), out byte parsedStr))
+                if (je.ValueKind == JsonValueKind.Number)
+                {
+                    if (je.TryGetInt32(out int num))
+                        return (PrimitiveFlags)(byte)num;
+                    if (je.TryGetSingle(out float frac))
+                        return (PrimitiveFlags)(byte)frac;
+                }
+                if (je.ValueKind == JsonValueKind.String && byte.TryParse(je.GetString(), out byte parsedStr))
                     return (PrimitiveFlags)parsedStr;
             }
             if (val is long l) return (PrimitiveFlags)(byte)l;
@@ -172,18 +186,53 @@ public sealed class BlockData
         return 2.0f;
     }
 
+    public string GetTeleportId()
+    {
+        if (Properties.TryGetValue("TeleportId", out var val) || Properties.TryGetValue("Id", out val))
+        {
+            string? s = val switch
+            {
+                JsonElement je when je.ValueKind == JsonValueKind.String => je.GetString(),
+                _ => val?.ToString()
+            };
+            if (!string.IsNullOrWhiteSpace(s))
+                return s!;
+        }
+        return Guid.NewGuid().ToString("N").Substring(0, 8);
+    }
+
     public List<string> GetTeleportTargets()
     {
-        if (Properties.TryGetValue("Targets", out var val) && val is IEnumerable<object> list)
+        var result = new List<string>();
+
+        if (Properties.TryGetValue("Targets", out var val) && val != null)
         {
-            var result = new List<string>();
-            foreach (var item in list)
+            IEnumerable<string?> items;
+
+            if (val is JsonElement je && je.ValueKind == JsonValueKind.Array)
             {
-                if (item != null) result.Add(item.ToString()!);
+                // System.Text.Json кладёт в Dictionary<string, object> именно JsonElement —
+                // проверка "is IEnumerable<object>" на нём не срабатывает.
+                items = je.EnumerateArray()
+                    .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.GetRawText());
             }
-            return result;
+            else if (val is IEnumerable<object> list)
+            {
+                items = list.Select(o => o?.ToString());
+            }
+            else
+            {
+                items = new[] { val.ToString() };
+            }
+
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item))
+                    result.Add(item!);
+            }
         }
-        return new List<string>();
+
+        return result;
     }
 
     public string GetDoorType()

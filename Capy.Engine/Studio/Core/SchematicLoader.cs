@@ -10,6 +10,7 @@ using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Toys;
+using Interactables.Interobjects.DoorUtils;
 using Mirror;
 using UnityEngine;
 using Light = Exiled.API.Features.Toys.Light;
@@ -25,12 +26,36 @@ public static class SchematicLoader
     private static readonly ConcurrentDictionary<string, (SchematicData Data, DateTime LastModified)> CachedSchematics = new(StringComparer.OrdinalIgnoreCase);
     private static readonly List<SchematicObject> ActiveInstances = new();
 
+    private static List<string>? _availableListCache;
+    private static DateTime _availableListCacheTime = DateTime.MinValue;
+    private const float AvailableListCacheSeconds = 10f;
+
     public static string PrimarySchematicsPath { get; private set; } = string.Empty;
     public static string FallbackSchematicsPath { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Убирает из имени схематики символы путей — защита от path traversal (.schem spawn ..\..\file).
+    /// </summary>
+    public static string SanitizeName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        foreach (char c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+
+        return name.Replace("..", "_").Trim();
+    }
 
     public static void ClearCache()
     {
         CachedSchematics.Clear();
+        InvalidateAvailableListCache();
+    }
+
+    internal static void InvalidateAvailableListCache()
+    {
+        _availableListCache = null;
     }
 
     public static IReadOnlyList<SchematicObject> SpawnedSchematics
@@ -67,6 +92,9 @@ public static class SchematicLoader
 
     public static List<string> GetAvailableSchematics()
     {
+        if (_availableListCache != null && (DateTime.UtcNow - _availableListCacheTime).TotalSeconds < AvailableListCacheSeconds)
+            return new List<string>(_availableListCache);
+
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void ScanDir(string dir)
@@ -90,11 +118,17 @@ public static class SchematicLoader
         ScanDir(PrimarySchematicsPath);
         ScanDir(FallbackSchematicsPath);
 
+        _availableListCache = new List<string>(result);
+        _availableListCacheTime = DateTime.UtcNow;
         return new List<string>(result);
     }
 
     public static string? FindSchematicFile(string schematicName)
     {
+        schematicName = SanitizeName(schematicName);
+        if (string.IsNullOrWhiteSpace(schematicName))
+            return null;
+
         string[] searchDirs = { PrimarySchematicsPath, FallbackSchematicsPath };
 
         foreach (var dir in searchDirs)
@@ -262,6 +296,7 @@ public static class SchematicLoader
 
                         var tpComp = tpGo.AddComponent<TeleportComponent>();
                         tpComp.Cooldown = block.GetTeleportCooldown();
+                        tpComp.TeleportId = block.GetTeleportId();
                         tpComp.Targets = block.GetTeleportTargets();
 
                         // Визуальный полупрозрачный куб-индикатор
@@ -299,6 +334,39 @@ public static class SchematicLoader
                         );
                         if (textToy?.Base != null)
                             schemObj.AddGameObject(block, textToy.Base.gameObject);
+                        break;
+                    }
+
+                    case BlockType.Door:
+                    {
+                        var doorPrefab = block.GetDoorType().ToLowerInvariant() switch
+                        {
+                            "hcz" => PrefabManager.DoorHcz,
+                            "ez" => PrefabManager.DoorEz,
+                            "bulk" => PrefabManager.DoorHeavyBulk,
+                            "gate" => PrefabManager.DoorGate,
+                            _ => PrefabManager.DoorLcz
+                        };
+
+                        if (doorPrefab != null)
+                        {
+                            // Двери не масштабируем — scale ломает их коллизии и анимации
+                            var doorGo = UnityEngine.Object.Instantiate(doorPrefab.gameObject, worldPos, worldRot);
+                            NetworkServer.Spawn(doorGo);
+                            schemObj.AddGameObject(block, doorGo);
+
+                            var variant = doorGo.GetComponent<DoorVariant>();
+                            if (variant != null)
+                            {
+                                var exiledDoor = Door.Get(variant);
+                                if (exiledDoor != null)
+                                    schemObj.AddDoor(exiledDoor);
+                            }
+                        }
+                        else
+                        {
+                            Log.Warn($"[CapyStudio] Дверь '{block.GetDoorType()}' в схематике '{name}' пропущена: префаб недоступен (префабы ещё не загружены?).");
+                        }
                         break;
                     }
 
@@ -377,6 +445,7 @@ public static class SchematicLoader
     /// </summary>
     public static bool Save(SchematicData data, string name, out string path)
     {
+        name = SanitizeName(name);
         path = Path.Combine(PrimarySchematicsPath, name + ".json");
         try
         {
@@ -387,6 +456,7 @@ public static class SchematicLoader
             string json = JsonSerializer.Serialize(data, options);
             File.WriteAllText(path, json);
             CachedSchematics[name] = (data, DateTime.UtcNow);
+            InvalidateAvailableListCache();
             return true;
         }
         catch (Exception ex)
@@ -410,10 +480,27 @@ public static class SchematicLoader
         var merged = new SchematicData
         {
             RootObjectId = 10000,
-            Blocks = new List<BlockData>(s1.Blocks)
+            Blocks = new List<BlockData>()
         };
 
-        int maxId = merged.Blocks.Count > 0 ? merged.Blocks.Max(b => b.ObjectId) : 10000;
+        int maxId = 10000;
+
+        // Глубокие копии: иначе merged шарит экземпляры BlockData с закэшированной схематикой
+        foreach (var b in s1.Blocks)
+        {
+            maxId = Math.Max(maxId, b.ObjectId);
+            merged.Blocks.Add(new BlockData
+            {
+                Name = b.Name,
+                ObjectId = b.ObjectId,
+                ParentId = b.ParentId,
+                Position = b.Position,
+                Rotation = b.Rotation,
+                Scale = b.Scale,
+                BlockType = b.BlockType,
+                Properties = new Dictionary<string, object>(b.Properties)
+            });
+        }
 
         foreach (var b in s2.Blocks)
         {
@@ -452,9 +539,18 @@ public static class SchematicLoader
     /// </summary>
     public static void DestroyAll()
     {
+        SchematicObject[] snapshot;
         lock (ActiveInstances)
         {
-            foreach (var instance in ActiveInstances)
+            snapshot = ActiveInstances.ToArray();
+        }
+
+        // Синхронизируем MapManager, чтобы в ActiveMapObjects не осталось протухших ссылок
+        Capy.Engine.Studio.Core.MapManager.DetachDestroyed(snapshot);
+
+        lock (ActiveInstances)
+        {
+            foreach (var instance in snapshot)
             {
                 instance.Destroy();
             }

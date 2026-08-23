@@ -49,12 +49,16 @@ public static class PrefabManager
 
     public static bool IsInitialized { get; private set; }
 
+    private static DateTime _lastInitWarnTime = DateTime.MinValue;
+
     public static void Initialize()
     {
         if (IsInitialized) return;
 
         try
         {
+            int foundCount = 0;
+
             foreach (GameObject gameObject in NetworkClient.prefabs.Values)
             {
                 if (gameObject == null) continue;
@@ -62,47 +66,56 @@ public static class PrefabManager
                 if (PrimitivePrefab == null && gameObject.TryGetComponent(out PrimitiveObjectToy prim))
                 {
                     PrimitivePrefab = prim;
+                    foundCount++;
                     continue;
                 }
 
                 if (LightPrefab == null && gameObject.TryGetComponent(out LightSourceToy light))
                 {
                     LightPrefab = light;
+                    foundCount++;
                     continue;
                 }
 
                 if (CapybaraPrefab == null && gameObject.TryGetComponent(out CapybaraToy capy))
                 {
                     CapybaraPrefab = capy;
+                    foundCount++;
                     continue;
                 }
 
                 if (TextPrefab == null && gameObject.TryGetComponent(out TextToy text))
                 {
                     TextPrefab = text;
+                    foundCount++;
                     continue;
                 }
 
                 if (InteractablePrefab == null && gameObject.TryGetComponent(out InvisibleInteractableToy interact))
                 {
                     InteractablePrefab = interact;
+                    foundCount++;
                     continue;
                 }
 
                 if (WorkstationPrefab == null && gameObject.TryGetComponent(out WorkstationController ws))
                 {
                     WorkstationPrefab = ws;
+                    foundCount++;
                     continue;
                 }
 
                 if (gameObject.TryGetComponent(out DoorVariant door))
                 {
                     string name = gameObject.name;
+                    // Порядок важен: "EZ Gate" содержит и "EZ", и "Gate" — Gate проверяем раньше
                     if (name.Contains("LCZ")) DoorLcz = door;
                     else if (name.Contains("HCZ") && !name.Contains("Bulk")) DoorHcz = door;
-                    else if (name.Contains("EZ")) DoorEz = door;
                     else if (name.Contains("Bulk")) DoorHeavyBulk = door;
                     else if (name.Contains("Gate")) DoorGate = door;
+                    else if (name.Contains("EZ")) DoorEz = door;
+
+                    foundCount++;
                     continue;
                 }
 
@@ -112,6 +125,8 @@ public static class PrefabManager
                     if (name.Contains("sport")) TargetSport = target;
                     else if (name.Contains("dboy")) TargetDBoy = target;
                     else if (name.Contains("binary")) TargetBinary = target;
+
+                    foundCount++;
                     continue;
                 }
 
@@ -119,6 +134,8 @@ public static class PrefabManager
                 {
                     if (gameObject.name.Contains("Lcz")) CameraLcz = cam;
                     else CameraHcz = cam;
+
+                    foundCount++;
                     continue;
                 }
 
@@ -131,11 +148,24 @@ public static class PrefabManager
                     else if (name.Contains("LargeGun")) LockerLargeGun = locker;
                     else if (name.Contains("Medkit") || name.Contains("Regular")) LockerMedkit = locker;
                     else if (name.Contains("Rifle")) LockerRifleRack = locker;
+
+                    foundCount++;
                     continue;
                 }
             }
 
-            IsInitialized = true;
+            // Префабы регистрируются в Mirror уже после старта плагина: если при инициализации
+            // ничего не нашлось — НЕ ставим флаг навсегда, чтобы повторить попытку при следующем Spawn.
+            if (foundCount > 0)
+            {
+                IsInitialized = true;
+                Exiled.API.Features.Log.Debug($"[CapyStudio Prefabs] Инициализировано префабов: {foundCount}");
+            }
+            else if ((DateTime.UtcNow - _lastInitWarnTime).TotalSeconds > 60)
+            {
+                _lastInitWarnTime = DateTime.UtcNow;
+                Exiled.API.Features.Log.Warn("[CapyStudio Prefabs] Сетевые префабы ещё не зарегистрированы (NetworkClient.prefabs пуст). Повторная попытка будет выполнена при следующем спавне.");
+            }
         }
         catch (Exception ex)
         {
