@@ -140,6 +140,14 @@ public sealed class SchematicCommand : ICommand
                 return true;
             }
 
+            case "reload":
+            case "r":
+            {
+                SchematicLoader.ClearCache();
+                response = "<color=green>[СХЕМАТИКИ]</color> Кэш схематик очищен. Все файлы .json будут прочитаны заново с диска!";
+                return true;
+            }
+
             default:
             {
                 response = $"<color=red>[ОШИБКА]</color> Неизвестная подкоманда '{subCmd}'. Введите <b>.schem</b> для справки.";

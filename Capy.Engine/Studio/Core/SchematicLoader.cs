@@ -20,11 +20,16 @@ namespace Capy.Engine.Studio.Core;
 /// </summary>
 public static class SchematicLoader
 {
-    private static readonly ConcurrentDictionary<string, SchematicData> CachedSchematics = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, (SchematicData Data, DateTime LastModified)> CachedSchematics = new(StringComparer.OrdinalIgnoreCase);
     private static readonly List<SchematicObject> ActiveInstances = new();
 
     public static string PrimarySchematicsPath { get; private set; } = string.Empty;
     public static string FallbackSchematicsPath { get; private set; } = string.Empty;
+
+    public static void ClearCache()
+    {
+        CachedSchematics.Clear();
+    }
 
     public static IReadOnlyList<SchematicObject> SpawnedSchematics
     {
@@ -109,16 +114,21 @@ public static class SchematicLoader
         return null;
     }
 
-    public static SchematicData? LoadSchematicData(string schematicName)
+    public static SchematicData? LoadSchematicData(string schematicName, bool forceReload = false)
     {
-        if (CachedSchematics.TryGetValue(schematicName, out var cached))
-            return cached;
-
         string? filePath = FindSchematicFile(schematicName);
         if (filePath == null)
         {
             Log.Warn($"[CapyStudio] Схематика '{schematicName}' не найдена.");
             return null;
+        }
+
+        DateTime fileModified = File.GetLastWriteTimeUtc(filePath);
+
+        if (!forceReload && CachedSchematics.TryGetValue(schematicName, out var cached))
+        {
+            if (cached.LastModified >= fileModified)
+                return cached.Data;
         }
 
         try
@@ -134,7 +144,7 @@ public static class SchematicLoader
             var data = JsonSerializer.Deserialize<SchematicData>(json, options);
             if (data != null)
             {
-                CachedSchematics[schematicName] = data;
+                CachedSchematics[schematicName] = (data, fileModified);
                 return data;
             }
         }
@@ -251,7 +261,7 @@ public static class SchematicLoader
             };
             string json = JsonSerializer.Serialize(data, options);
             File.WriteAllText(path, json);
-            CachedSchematics[name] = data;
+            CachedSchematics[name] = (data, DateTime.UtcNow);
             return true;
         }
         catch (Exception ex)
