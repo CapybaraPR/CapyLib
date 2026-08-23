@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Capy.Engine.CustomItems.Base;
 using Capy.Engine.CustomItems.Manager;
 using Capy.Engine.DevTools.Hud;
@@ -11,9 +13,18 @@ using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hud.Panels;
 
+/// <summary>
+/// Нативная панель HUD над полоской HP для отображения способностей предметов.
+/// Обновляется синхронно в общем цикле PlayerHud без мерцания.
+/// </summary>
 public class ItemHudPanel : HudPanel
 {
     private string _lastText = string.Empty;
+
+    /// <summary>
+    /// Внешний провайдер текста для панели предметов (например, для свободных наблюдателей).
+    /// </summary>
+    public static Func<Player, string?>? ExternalItemHudProvider { get; set; }
 
     public ItemHudPanel(Player player) : base(player) { }
 
@@ -50,8 +61,33 @@ public class ItemHudPanel : HudPanel
             return;
         }
 
-        CustomItem? customItem = CustomItemsManager.Items.FirstOrDefault(i => i.IsTracked(Player.CurrentItem));
-        if (customItem == null)
+        string text = string.Empty;
+
+        // 1. Проверяем внешний провайдер (Vanish монетка / карта)
+        if (ExternalItemHudProvider != null)
+        {
+            try
+            {
+                text = ExternalItemHudProvider.Invoke(Player) ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[ItemHudPanel] Ошибка в ExternalItemHudProvider: {ex}");
+            }
+        }
+
+        // 2. Если внешний провайдер ничего не вернул — проверяем стандартные кастомные предметы
+        if (string.IsNullOrEmpty(text))
+        {
+            CustomItem? customItem = CustomItemsManager.Items.FirstOrDefault(i => i.IsTracked(Player.CurrentItem));
+            if (customItem != null)
+            {
+                string hex = customItem.ColorHex?.TrimStart('#') ?? "FFA500";
+                text = $"<size=22><color=#{hex}><b>[{customItem.Name}]</b></color></size>";
+            }
+        }
+
+        if (string.IsNullOrEmpty(text))
         {
             if (!string.IsNullOrEmpty(_lastText))
             {
@@ -64,11 +100,11 @@ public class ItemHudPanel : HudPanel
         if (!EnsureHint()) return;
 
         Vector2 pos = HudLayout.GetDynamicStatsPosition(Player);
-        Hint!.XCoordinate = pos.x;
-        Hint.YCoordinate = pos.y;
-
-        string hex = customItem.ColorHex?.TrimStart('#') ?? "FFA500";
-        string text = $"<size=22><color=#{hex}><b>[{customItem.Name}]</b></color></size>";
+        if (Hint != null)
+        {
+            Hint.XCoordinate = pos.x;
+            Hint.YCoordinate = pos.y;
+        }
 
         if (text != _lastText)
         {
