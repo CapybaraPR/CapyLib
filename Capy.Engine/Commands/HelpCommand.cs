@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using CommandSystem;
 using Exiled.API.Features;
@@ -7,6 +8,17 @@ namespace Capy.Commands;
 
 public static class HelpMessageBuilder
 {
+    private static readonly List<string> CustomGameplayCommands = new();
+
+    /// <summary>
+    /// Зарегистрировать дополнительную команду игрового режима (например, .res, .kill в NoRules).
+    /// </summary>
+    public static void RegisterCustomCommand(string commandWithDesc)
+    {
+        if (!CustomGameplayCommands.Contains(commandWithDesc))
+            CustomGameplayCommands.Add(commandWithDesc);
+    }
+
     public static string Build(ICommandSender? sender)
     {
         Player? player = sender != null ? Player.Get(sender) : null;
@@ -22,11 +34,20 @@ public static class HelpMessageBuilder
         sb.AppendLine("  <color=#ffd285>* .stats</color>                 <color=#c2c2c2>-- Личная статистика (K/D, раунды, онлайн)</color>");
         sb.AppendLine("  <color=#ffd285>* .top</color>                   <color=#c2c2c2>-- Топ-10 игроков сервера по фрагам</color>");
         sb.AppendLine("  <color=#ffd285>* .top time</color>              <color=#c2c2c2>-- Топ-10 игроков по наигранному времени</color>");
-        sb.AppendLine("  <color=#ffd285>* .res</color>                   <color=#c2c2c2>-- Быстрое возрождение в первые 3 мин (наблюдатели)</color>");
-        sb.AppendLine("  <color=#ffd285>* .kill</color>                  <color=#c2c2c2>-- Совершить самоубийство (живые игроки)</color>");
         sb.AppendLine("  <color=#ffd285>* .linkdiscord <код></color>     <color=#c2c2c2>-- Привязать Discord к аккаунту (/steamsl)</color>");
         sb.AppendLine("  <color=#ffd285>* .help</color>                  <color=#c2c2c2>-- Показать эту справку</color>");
         sb.AppendLine();
+
+        if (CustomGameplayCommands.Count > 0)
+        {
+            sb.AppendLine("<color=#ffd285>>> КОМАНДЫ ИГРОВОГО РЕЖИМА:</color>");
+            foreach (var cmd in CustomGameplayCommands)
+            {
+                sb.AppendLine($"  {cmd}");
+            }
+            sb.AppendLine();
+        }
+
         sb.AppendLine("<color=#a3e635>>> ТЕГИ И ОТОБРАЖЕНИЕ:</color>");
         sb.AppendLine("  <color=#ffd285>* .showtag</color>               <color=#c2c2c2>-- Показать свой тег над головой</color>");
         sb.AppendLine("  <color=#ffd285>* .hidetag</color>               <color=#c2c2c2>-- Скрыть свой тег над головой</color>");
