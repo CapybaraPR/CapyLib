@@ -22,6 +22,8 @@ public static class HelpMessageBuilder
         sb.AppendLine("  <color=#ffd285>* .stats</color>                 <color=#c2c2c2>-- Личная статистика (K/D, раунды, онлайн)</color>");
         sb.AppendLine("  <color=#ffd285>* .top</color>                   <color=#c2c2c2>-- Топ-10 игроков сервера по фрагам</color>");
         sb.AppendLine("  <color=#ffd285>* .top time</color>              <color=#c2c2c2>-- Топ-10 игроков по наигранному времени</color>");
+        sb.AppendLine("  <color=#ffd285>* .res</color>                   <color=#c2c2c2>-- Быстрое возрождение в первые 3 мин (наблюдатели)</color>");
+        sb.AppendLine("  <color=#ffd285>* .kill</color>                  <color=#c2c2c2>-- Совершить самоубийство (живые игроки)</color>");
         sb.AppendLine("  <color=#ffd285>* .linkdiscord <код></color>     <color=#c2c2c2>-- Привязать Discord к аккаунту (/steamsl)</color>");
         sb.AppendLine("  <color=#ffd285>* .help</color>                  <color=#c2c2c2>-- Показать эту справку</color>");
         sb.AppendLine();
