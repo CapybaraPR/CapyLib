@@ -55,6 +55,16 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);
         SafeExecute("AssKeybinds", Capy.Engine.ServerSpecific.AssKeybinds.Initialize);
         SafeExecute("HudModule", Capy.Engine.Hud.HudModule.Enable);
+        SafeExecute("CapyStudio", () =>
+        {
+            Capy.Engine.Studio.Core.SchematicLoader.Initialize();
+            Capy.Engine.Studio.Core.MapManager.Initialize();
+            Capy.Engine.Studio.ToolGun.CapyToolGun.Initialize();
+
+            Exiled.Events.Handlers.Server.RoundStarted += Capy.Engine.Studio.Core.MapManager.OnRoundStarted;
+            Exiled.Events.Handlers.Server.RestartingRound += Capy.Engine.Studio.Core.MapManager.OnRoundRestarted;
+        });
+
         if (!_modulesDeferred)
             SafeExecute("ModuleLoader", InitializeModules);
 
@@ -75,6 +85,15 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         {
             LicenseManager.LicenseConfirmed -= OnLicenseConfirmed;
             LicenseManager.Stop();
+        });
+        SafeExecute("CapyStudio.Disable", () =>
+        {
+            Exiled.Events.Handlers.Server.RoundStarted -= Capy.Engine.Studio.Core.MapManager.OnRoundStarted;
+            Exiled.Events.Handlers.Server.RestartingRound -= Capy.Engine.Studio.Core.MapManager.OnRoundRestarted;
+
+            Capy.Engine.Studio.ToolGun.CapyToolGun.Unregister();
+            Capy.Engine.Studio.Core.MapManager.ClearCurrentMap();
+            Capy.Engine.Studio.Core.SchematicLoader.DestroyAll();
         });
         SafeExecute("HudModule.Disable", Capy.Engine.Hud.HudModule.Disable);
         SafeExecute("PlayerStateCleaner", PlayerStateCleaner.Shutdown);
