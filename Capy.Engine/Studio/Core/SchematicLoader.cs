@@ -197,9 +197,10 @@ public static class SchematicLoader
                 {
                     case BlockType.Primitive:
                     {
+                        var flags = block.GetPrimitiveFlags();
                         var prim = Primitive.Create(
                             primitiveType: block.GetPrimitiveType(),
-                            flags: block.GetPrimitiveFlags(),
+                            flags: flags,
                             position: worldPos,
                             rotation: worldRot.eulerAngles,
                             scale: worldScale,
@@ -208,7 +209,22 @@ public static class SchematicLoader
                         );
 
                         if (prim != null)
+                        {
+                            bool isCollidable = (flags & PrimitiveFlags.Collidable) != 0;
+                            if (!isCollidable && prim.GameObject != null)
+                            {
+                                try
+                                {
+                                    foreach (var col in prim.GameObject.GetComponentsInChildren<Collider>())
+                                    {
+                                        col.enabled = false;
+                                    }
+                                }
+                                catch { }
+                            }
+
                             schemObj.AddPrimitive(block, prim);
+                        }
                         break;
                     }
 
