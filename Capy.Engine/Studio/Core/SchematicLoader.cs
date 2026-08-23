@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using AdminToys;
 using Capy.Engine.Studio.Models;
@@ -9,14 +10,15 @@ using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Toys;
+using Mirror;
 using UnityEngine;
 using Light = Exiled.API.Features.Toys.Light;
 
 namespace Capy.Engine.Studio.Core;
 
 /// <summary>
-/// Главный загрузчик и спавнер схематик движка CapyStudio.
-/// Полностью автономен, совместим со схематиками MapEditorReborn (.json) и использует нативные EXILED Toys.
+/// Главный загрузчик и парсер схематик CapyStudio.
+/// Обеспечивает нативный спавн примитивов, источников света, дверей, телепортов, текста и локеров.
 /// </summary>
 public static class SchematicLoader
 {
@@ -52,6 +54,8 @@ public static class SchematicLoader
         {
             if (!Directory.Exists(PrimarySchematicsPath))
                 Directory.CreateDirectory(PrimarySchematicsPath);
+
+            PrefabManager.Initialize();
         }
         catch (Exception ex)
         {
@@ -69,13 +73,11 @@ public static class SchematicLoader
         {
             if (!Directory.Exists(dir)) return;
 
-            // 1. Прямые .json файлы
             foreach (var file in Directory.GetFiles(dir, "*.json", SearchOption.TopDirectoryOnly))
             {
                 result.Add(Path.GetFileNameWithoutExtension(file));
             }
 
-            // 2. Вложенные папки с одноименными .json (формат MER: Schematics/Capybara/Capybara.json)
             foreach (var subDir in Directory.GetDirectories(dir))
             {
                 string dirName = Path.GetFileName(subDir);
@@ -100,12 +102,10 @@ public static class SchematicLoader
             if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
                 continue;
 
-            // Вариант 1: Schematics/Name.json
             string directFile = Path.Combine(dir, schematicName + ".json");
             if (File.Exists(directFile))
                 return directFile;
 
-            // Вариант 2: Schematics/Name/Name.json
             string nestedFile = Path.Combine(dir, schematicName, schematicName + ".json");
             if (File.Exists(nestedFile))
                 return nestedFile;
@@ -173,6 +173,8 @@ public static class SchematicLoader
     /// </summary>
     public static SchematicObject? Spawn(SchematicData data, string name, Vector3 position, Quaternion? rotation = null, Vector3? scale = null)
     {
+        PrefabManager.Initialize();
+
         Quaternion rootRot = rotation ?? Quaternion.identity;
         Vector3 rootScale = scale ?? Vector3.one;
 
@@ -191,9 +193,9 @@ public static class SchematicLoader
 
                 Vector3 worldScale = Vector3.Scale(block.Scale.ToUnityVector3(), rootScale);
 
-                switch (block.BlockType)
+                switch ((BlockType)block.BlockType)
                 {
-                    case 1: // Primitive
+                    case BlockType.Primitive:
                     {
                         var prim = Primitive.Create(
                             primitiveType: block.GetPrimitiveType(),
@@ -210,7 +212,7 @@ public static class SchematicLoader
                         break;
                     }
 
-                    case 2: // LightSource
+                    case BlockType.LightSource:
                     {
                         var light = Light.Create(
                             position: worldPos,
@@ -226,6 +228,113 @@ public static class SchematicLoader
                             light.Range = block.GetLightRange();
                             light.Spawn();
                             schemObj.AddLight(block, light);
+                        }
+                        break;
+                    }
+
+                    case BlockType.Teleport:
+                    {
+                        // Создаём функциональный телепорт
+                        var tpGo = new GameObject($"Teleport_{block.Name}");
+                        tpGo.transform.position = worldPos;
+                        tpGo.transform.rotation = worldRot;
+                        tpGo.transform.localScale = worldScale;
+
+                        var col = tpGo.AddComponent<BoxCollider>();
+                        col.isTrigger = true;
+                        col.size = Vector3.one * 1.5f;
+
+                        var tpComp = tpGo.AddComponent<TeleportComponent>();
+                        tpComp.Cooldown = block.GetTeleportCooldown();
+                        tpComp.Targets = block.GetTeleportTargets();
+
+                        // Визуальный полупрозрачный куб-индикатор
+                        var visualPrim = Primitive.Create(
+                            primitiveType: PrimitiveType.Cube,
+                            flags: PrimitiveFlags.Visible,
+                            position: worldPos,
+                            rotation: worldRot.eulerAngles,
+                            scale: worldScale,
+                            spawn: true,
+                            color: new Color(0.2f, 0.6f, 1.0f, 0.4f)
+                        );
+
+                        schemObj.AddGameObject(block, tpGo);
+                        if (visualPrim != null) schemObj.AddPrimitive(block, visualPrim);
+                        break;
+                    }
+
+                    case BlockType.Capybara:
+                    {
+                        var capy = Exiled.API.Features.Toys.Capybara.Create(position: worldPos, rotation: worldRot, scale: worldScale, collidable: true, spawn: true);
+                        if (capy?.Base != null)
+                            schemObj.AddGameObject(block, capy.Base.gameObject);
+                        break;
+                    }
+
+                    case BlockType.Text:
+                    {
+                        var textToy = Exiled.API.Features.Toys.Text.Create(
+                            position: worldPos,
+                            rotation: worldRot,
+                            scale: worldScale,
+                            text: block.GetTextContent(),
+                            spawn: true
+                        );
+                        if (textToy?.Base != null)
+                            schemObj.AddGameObject(block, textToy.Base.gameObject);
+                        break;
+                    }
+
+                    case BlockType.Workstation:
+                    {
+                        if (PrefabManager.WorkstationPrefab != null)
+                        {
+                            var wsGo = UnityEngine.Object.Instantiate(PrefabManager.WorkstationPrefab.gameObject, worldPos, worldRot);
+                            wsGo.transform.localScale = worldScale;
+                            NetworkServer.Spawn(wsGo);
+                            schemObj.AddGameObject(block, wsGo);
+                        }
+                        break;
+                    }
+
+                    case BlockType.ShootingTarget:
+                    {
+                        var targetPrefab = block.GetShootingTargetType().ToLowerInvariant() switch
+                        {
+                            "dboy" => PrefabManager.TargetDBoy,
+                            "binary" => PrefabManager.TargetBinary,
+                            _ => PrefabManager.TargetSport
+                        };
+
+                        if (targetPrefab != null)
+                        {
+                            var targetGo = UnityEngine.Object.Instantiate(targetPrefab.gameObject, worldPos, worldRot);
+                            targetGo.transform.localScale = worldScale;
+                            NetworkServer.Spawn(targetGo);
+                            schemObj.AddGameObject(block, targetGo);
+                        }
+                        break;
+                    }
+
+                    case BlockType.Locker:
+                    {
+                        var lockerPrefab = block.GetLockerType().ToLowerInvariant() switch
+                        {
+                            string s when s.Contains("207") => PrefabManager.Pedestal207,
+                            string s when s.Contains("018") => PrefabManager.Pedestal018,
+                            string s when s.Contains("gun") => PrefabManager.LockerLargeGun,
+                            string s when s.Contains("medkit") => PrefabManager.LockerMedkit,
+                            string s when s.Contains("rifle") => PrefabManager.LockerRifleRack,
+                            _ => PrefabManager.Pedestal500
+                        };
+
+                        if (lockerPrefab != null)
+                        {
+                            var lockerGo = UnityEngine.Object.Instantiate(lockerPrefab.gameObject, worldPos, worldRot);
+                            lockerGo.transform.localScale = worldScale;
+                            NetworkServer.Spawn(lockerGo);
+                            schemObj.AddGameObject(block, lockerGo);
                         }
                         break;
                     }
@@ -272,27 +381,68 @@ public static class SchematicLoader
     }
 
     /// <summary>
+    /// Объединяет несколько схематик в одну новую.
+    /// </summary>
+    public static bool Merge(string name1, string name2, string outputName, out string path)
+    {
+        path = string.Empty;
+        var s1 = LoadSchematicData(name1);
+        var s2 = LoadSchematicData(name2);
+
+        if (s1 == null || s2 == null) return false;
+
+        var merged = new SchematicData
+        {
+            RootObjectId = 10000,
+            Blocks = new List<BlockData>(s1.Blocks)
+        };
+
+        int maxId = merged.Blocks.Count > 0 ? merged.Blocks.Max(b => b.ObjectId) : 10000;
+
+        foreach (var b in s2.Blocks)
+        {
+            maxId++;
+            var cloned = new BlockData
+            {
+                Name = b.Name,
+                ObjectId = maxId,
+                ParentId = 10000,
+                Position = b.Position,
+                Rotation = b.Rotation,
+                Scale = b.Scale,
+                BlockType = b.BlockType,
+                Properties = new Dictionary<string, object>(b.Properties)
+            };
+            merged.Blocks.Add(cloned);
+        }
+
+        return Save(merged, outputName, out path);
+    }
+
+    /// <summary>
+    /// Удаляет схематику из списка активных.
+    /// </summary>
+    public static void RemoveInstance(SchematicObject obj)
+    {
+        lock (ActiveInstances)
+        {
+            ActiveInstances.Remove(obj);
+        }
+        obj.Destroy();
+    }
+
+    /// <summary>
     /// Удаляет все заспавненные схематики и очищает память.
     /// </summary>
     public static void DestroyAll()
     {
         lock (ActiveInstances)
         {
-            foreach (var inst in ActiveInstances)
+            foreach (var instance in ActiveInstances)
             {
-                try { inst.Destroy(); } catch { }
+                instance.Destroy();
             }
             ActiveInstances.Clear();
         }
-    }
-
-    public static void RemoveInstance(SchematicObject obj)
-    {
-        if (obj == null) return;
-        lock (ActiveInstances)
-        {
-            ActiveInstances.Remove(obj);
-        }
-        obj.Destroy();
     }
 }

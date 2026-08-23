@@ -1,32 +1,32 @@
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using CommandSystem;
 using Capy.Engine.Studio.Core;
 using Capy.Engine.Studio.ToolGun;
+using CommandSystem;
 using Exiled.API.Features;
 using UnityEngine;
 
 namespace Capy.Engine.Studio.Commands;
 
 /// <summary>
-/// Команда ToolGun для входа в режим строителя.
+/// Главная команда строителя (ToolGun).
 /// </summary>
 [CommandHandler(typeof(ClientCommandHandler))]
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public sealed class ToolGunCommand : ICommand
 {
     public string Command => "toolgun";
-    public string[] Aliases => new[] { "tg", "builder", "build" };
-    public string Description => "Включить / выключить режим строительного инструмента ToolGun.";
+    public string[] Aliases => new[] { "tg", "capytool", "ctool" };
+    public string Description => "Включает или выключает интерактивный режим строителя (CapyStudio ToolGun & PhysGun).";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         Player? player = Player.Get(sender);
         if (player == null)
         {
-            response = "<color=red>[ОШИБКА]</color> Команда доступна только игрокам на сервере.";
+            response = "Команда доступна только игрокам на сервере.";
             return false;
         }
 
@@ -47,20 +47,14 @@ public sealed class ToolGunCommand : ICommand
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
 public sealed class SchematicCommand : ICommand
 {
-    public string Command => "schematic";
-    public string[] Aliases => new[] { "schem", "cschem" };
-    public string Description => "Управление схематиками CapyStudio (спавн, список, очистка).";
+    public string Command => "schem";
+    public string[] Aliases => new[] { "schematic", "cschem", "capyschem" };
+    public string Description => "Управление схематиками (спавн, список, слияние, очистка, перезагрузка).";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         Player? player = Player.Get(sender);
-        if (player == null)
-        {
-            response = "<color=red>[ОШИБКА]</color> Команда доступна только игрокам на сервере.";
-            return false;
-        }
-
-        if (!player.RemoteAdminAccess)
+        if (player != null && !player.RemoteAdminAccess)
         {
             response = "<color=red>[ДОСТУП ЗАПРЕЩЁН]</color> Требуются права администратора.";
             return false;
@@ -69,10 +63,11 @@ public sealed class SchematicCommand : ICommand
         if (arguments.Count == 0)
         {
             response = "\n<color=#38bdf8><b>🏗️ === [ CapyStudio Schematics ] ===</b></color>\n" +
-                       "<color=#a3e635>• .schem spawn <имя> [масштаб]</color> -- Заспавнить схематику в точке прицела\n" +
-                       "<color=#a3e635>• .schem list</color> -- Список всех доступных .json схематик\n" +
-                       "<color=#a3e635>• .schem clear</color> -- Удалить все заспавненные схематики\n" +
-                       "<color=#a3e635>• .toolgun (.tg)</color> -- Активировать строительный ToolGun";
+                       "<color=#a3e635>• .schem spawn <имя> [масштаб]</color> -- Заспавнить схематику перед собой\n" +
+                       "<color=#a3e635>• .schem list</color> -- Показать доступные схематики\n" +
+                       "<color=#a3e635>• .schem merge <схем1> <схем2> <итог></color> -- Объединить две схематики в одну\n" +
+                       "<color=#a3e635>• .schem clear</color> -- Удалить все активные схематики\n" +
+                       "<color=#a3e635>• .schem reload</color> -- Очистить кэш и перечитать файлы с диска";
             return true;
         }
 
@@ -85,18 +80,24 @@ public sealed class SchematicCommand : ICommand
             {
                 if (arguments.Count < 2)
                 {
-                    response = "<color=red>[ОШИБКА]</color> Использование: <b>.schem spawn <название> [масштаб]</b>";
+                    response = "<color=red>[ОШИБКА]</color> Использование: <b>.schem spawn <имя_схематики> [масштаб]</b>";
+                    return false;
+                }
+
+                if (player == null)
+                {
+                    response = "Спавн по прицелу доступен только игрокам в игре.";
                     return false;
                 }
 
                 string name = arguments.At(1);
                 float scale = 1.0f;
-                if (arguments.Count > 2 && float.TryParse(arguments.At(2), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                if (arguments.Count >= 3 && float.TryParse(arguments.At(2), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsedScale))
                 {
-                    scale = Mathf.Clamp(parsed, 0.05f, 20f);
+                    scale = Mathf.Clamp(parsedScale, 0.05f, 50.0f);
                 }
 
-                Vector3 targetPos = player.Position + (player.Rotation * Vector3.forward * 2.0f);
+                Vector3 targetPos = player.Position + (player.Rotation * (Vector3.forward * 3f)) + Vector3.up * 0.1f;
                 Quaternion targetRot = player.Rotation;
 
                 if (Physics.Raycast(player.CameraTransform.position, player.CameraTransform.forward, out var hit, 60f))
@@ -129,6 +130,28 @@ public sealed class SchematicCommand : ICommand
                 string formattedList = string.Join("\n", list.Select(s => $"  <color=#67e8f9>•</color> <color=#ffffff>{s}</color>"));
                 response = $"\n<color=#38bdf8><b>Доступные схематики ({list.Count}):</b></color>\n{formattedList}";
                 return true;
+            }
+
+            case "merge":
+            {
+                if (arguments.Count < 4)
+                {
+                    response = "<color=red>[ОШИБКА]</color> Использование: <b>.schem merge <схематика1> <схематика2> <новое_имя></b>";
+                    return false;
+                }
+
+                string s1 = arguments.At(1);
+                string s2 = arguments.At(2);
+                string output = arguments.At(3);
+
+                if (SchematicLoader.Merge(s1, s2, output, out string savedPath))
+                {
+                    response = $"<color=green>[СЛИЯНИЕ]</color> Схематики <b>{s1}</b> и <b>{s2}</b> успешно объединены в <b>{output}.json</b>!";
+                    return true;
+                }
+
+                response = "<color=red>[ОШИБКА]</color> Не удалось объединить схематики. Проверьте правильность имён исходных файлов.";
+                return false;
             }
 
             case "clear":
@@ -198,13 +221,22 @@ public sealed class MapCommand : ICommand
                     return false;
                 }
 
-                return MapManager.LoadMap(arguments.At(1), out response);
+                string mapName = arguments.At(1);
+                if (MapManager.LoadMap(mapName, out string loadResponse))
+                {
+                    response = loadResponse;
+                    return true;
+                }
+
+                response = loadResponse;
+                return false;
             }
 
             case "clear":
+            case "unload":
             {
-                int count = MapManager.ClearCurrentMap();
-                response = $"<color=yellow>[КАРТА]</color> Карта очищена. Удалено объектов: <b>{count}</b>.";
+                MapManager.ClearCurrentMap();
+                response = "<color=yellow>[КАРТЫ]</color> Текущая карта выгружена, все объекты очищены.";
                 return true;
             }
 
@@ -263,7 +295,6 @@ public sealed class GrabCommand : ICommand
             return false;
         }
 
-        // Включаем ToolGun если не включен
         if (!CapyToolGun.IsHoldingToolGun(player))
         {
             CapyToolGun.ToggleToolGun(player, out _);
@@ -273,4 +304,3 @@ public sealed class GrabCommand : ICommand
         return true;
     }
 }
-

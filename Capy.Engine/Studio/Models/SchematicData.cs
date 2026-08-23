@@ -46,7 +46,13 @@ public enum BlockType
     RagdollSpawnPoint = 6,
     PlayerSpawnPoint = 7,
     ShootingTarget = 8,
-    Teleport = 9
+    Teleport = 9,
+    Capybara = 10,
+    Text = 11,
+    Locker = 12,
+    Camera079 = 13,
+    Waypoint = 14,
+    Interactable = 15
 }
 
 /// <summary>
@@ -118,6 +124,62 @@ public sealed class BlockData
         if (Properties.TryGetValue("Shadows", out var val) && bool.TryParse(val?.ToString(), out bool parsed))
             return parsed;
         return true;
+    }
+
+    public string GetTextContent()
+    {
+        if (Properties.TryGetValue("Text", out var val) || Properties.TryGetValue("Content", out val))
+            return val?.ToString() ?? "Text";
+        return "CapyStudio Text";
+    }
+
+    public float GetTextSize()
+    {
+        if (Properties.TryGetValue("TextSize", out var val) && float.TryParse(val?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+            return parsed;
+        return 1.0f;
+    }
+
+    public float GetTeleportCooldown()
+    {
+        if (Properties.TryGetValue("Cooldown", out var val) && float.TryParse(val?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+            return parsed;
+        return 2.0f;
+    }
+
+    public List<string> GetTeleportTargets()
+    {
+        if (Properties.TryGetValue("Targets", out var val) && val is IEnumerable<object> list)
+        {
+            var result = new List<string>();
+            foreach (var item in list)
+            {
+                if (item != null) result.Add(item.ToString()!);
+            }
+            return result;
+        }
+        return new List<string>();
+    }
+
+    public string GetDoorType()
+    {
+        if (Properties.TryGetValue("DoorType", out var val))
+            return val?.ToString() ?? "LCZ";
+        return "LCZ";
+    }
+
+    public string GetLockerType()
+    {
+        if (Properties.TryGetValue("LockerType", out var val))
+            return val?.ToString() ?? "PedestalScp500";
+        return "PedestalScp500";
+    }
+
+    public string GetShootingTargetType()
+    {
+        if (Properties.TryGetValue("TargetType", out var val))
+            return val?.ToString() ?? "Sport";
+        return "Sport";
     }
 }
 
