@@ -236,3 +236,41 @@ public sealed class MapCommand : ICommand
         }
     }
 }
+
+/// <summary>
+/// Команда живого захвата и перемещения объектов (PhysGun Grab).
+/// </summary>
+[CommandHandler(typeof(ClientCommandHandler))]
+[CommandHandler(typeof(RemoteAdminCommandHandler))]
+public sealed class GrabCommand : ICommand
+{
+    public string Command => "grab";
+    public string[] Aliases => new[] { "cgrab", "physgun" };
+    public string Description => "Захватывает объект перед прицелом и перемещает его в реальном времени.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        Player? player = Player.Get(sender);
+        if (player == null)
+        {
+            response = "Команда доступна только игрокам.";
+            return false;
+        }
+
+        if (!player.RemoteAdminAccess)
+        {
+            response = "<color=red>[ДОСТУП ЗАПРЕЩЁН]</color> Требуются права администратора.";
+            return false;
+        }
+
+        // Включаем ToolGun если не включен
+        if (!CapyToolGun.IsHoldingToolGun(player))
+        {
+            CapyToolGun.ToggleToolGun(player, out _);
+        }
+
+        response = "<color=green>[PHYSGUN]</color> Наведите COM-15 на объект и нажмите <b>ПКМ</b> для захвата!";
+        return true;
+    }
+}
+
