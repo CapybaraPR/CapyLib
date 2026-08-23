@@ -62,6 +62,6 @@ public static class HudLayout {
 
         if (target.Role.Type == RoleTypeId.Scp106) offset += 42f;
 
-        return new Vector2(-295f, 980f - offset);
+        return new Vector2(-312f, 945f - offset);
     }
 }
