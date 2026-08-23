@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json;
 using AdminToys;
 using UnityEngine;
 
@@ -71,11 +72,18 @@ public sealed class BlockData
 
     public PrimitiveType GetPrimitiveType()
     {
-        if (Properties.TryGetValue("PrimitiveType", out var val))
+        if (Properties.TryGetValue("PrimitiveType", out var val) && val != null)
         {
+            if (val is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Number && je.TryGetInt32(out int num))
+                    return (PrimitiveType)num;
+                if (int.TryParse(je.GetString(), out int parsedStr))
+                    return (PrimitiveType)parsedStr;
+            }
             if (val is long l) return (PrimitiveType)(int)l;
             if (val is int i) return (PrimitiveType)i;
-            if (int.TryParse(val?.ToString(), out int parsed)) return (PrimitiveType)parsed;
+            if (int.TryParse(val.ToString(), out int parsed)) return (PrimitiveType)parsed;
         }
         return PrimitiveType.Cube;
     }
@@ -84,7 +92,7 @@ public sealed class BlockData
     {
         if (Properties.TryGetValue("Color", out var val) && val != null)
         {
-            string hex = val.ToString()?.Trim() ?? string.Empty;
+            string hex = (val is JsonElement je ? je.GetString() : val.ToString())?.Trim() ?? string.Empty;
             if (!hex.StartsWith("#") && (hex.Length == 6 || hex.Length == 8))
                 hex = "#" + hex;
 
@@ -96,26 +104,43 @@ public sealed class BlockData
 
     public PrimitiveFlags GetPrimitiveFlags()
     {
-        if (Properties.TryGetValue("PrimitiveFlags", out var val))
+        if (Properties.TryGetValue("PrimitiveFlags", out var val) && val != null)
         {
+            if (val is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Number && je.TryGetInt32(out int num))
+                    return (PrimitiveFlags)(byte)num;
+                if (byte.TryParse(je.GetString(), out byte parsedStr))
+                    return (PrimitiveFlags)parsedStr;
+            }
             if (val is long l) return (PrimitiveFlags)(byte)l;
             if (val is int i) return (PrimitiveFlags)(byte)i;
-            if (byte.TryParse(val?.ToString(), out byte parsed)) return (PrimitiveFlags)parsed;
+            if (byte.TryParse(val.ToString(), out byte parsed)) return (PrimitiveFlags)parsed;
         }
         return PrimitiveFlags.Visible | PrimitiveFlags.Collidable;
     }
 
     public float GetLightIntensity()
     {
-        if (Properties.TryGetValue("Intensity", out var val) && float.TryParse(val?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
-            return parsed;
+        if (Properties.TryGetValue("Intensity", out var val) && val != null)
+        {
+            if (val is JsonElement je && je.ValueKind == JsonValueKind.Number && je.TryGetSingle(out float num))
+                return num;
+            if (float.TryParse(val.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                return parsed;
+        }
         return 1.0f;
     }
 
     public float GetLightRange()
     {
-        if (Properties.TryGetValue("Range", out var val) && float.TryParse(val?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
-            return parsed;
+        if (Properties.TryGetValue("Range", out var val) && val != null)
+        {
+            if (val is JsonElement je && je.ValueKind == JsonValueKind.Number && je.TryGetSingle(out float num))
+                return num;
+            if (float.TryParse(val.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                return parsed;
+        }
         return 5.0f;
     }
 
