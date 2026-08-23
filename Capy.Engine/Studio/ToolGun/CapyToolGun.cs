@@ -14,6 +14,7 @@ using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.API.Features.Pickups;
 using Exiled.API.Features.Toys;
+using Exiled.Events.EventArgs.Player;
 using MEC;
 using UnityEngine;
 using Light = Exiled.API.Features.Toys.Light;
@@ -65,7 +66,7 @@ public sealed class ToolGunState
 /// <summary>
 /// Строительный инструмент строителя (ToolGun & PhysGun).
 /// Оснащён лазерным позиционированием, живым захватом объектов на лету (Real-time Grab & Drag),
-/// сеткой привязки и нативным HUD-управлением.
+/// сеткой привязки, поддержкой событий выстрела/прицеливания оружия и нативным HUD-управлением.
 /// </summary>
 public static class CapyToolGun
 {
@@ -77,11 +78,25 @@ public static class CapyToolGun
     {
         AssKeybinds.OnKeybindPressed += OnKeybindPressed;
         ItemHudPanel.ExternalItemHudProvider += GetToolGunHudText;
+
+        Exiled.Events.Handlers.Player.Shooting += OnShooting;
+        Exiled.Events.Handlers.Player.DryfiringWeapon += OnDryfiringWeapon;
+        Exiled.Events.Handlers.Player.AimingDownSight += OnAimingDownSight;
+        Exiled.Events.Handlers.Player.ReloadingWeapon += OnReloadingWeapon;
+        Exiled.Events.Handlers.Player.TogglingFlashlight += OnTogglingFlashlight;
+        Exiled.Events.Handlers.Player.DroppingItem += OnDroppingItem;
     }
 
     public static void Unregister()
     {
         AssKeybinds.OnKeybindPressed -= OnKeybindPressed;
+        Exiled.Events.Handlers.Player.Shooting -= OnShooting;
+        Exiled.Events.Handlers.Player.DryfiringWeapon -= OnDryfiringWeapon;
+        Exiled.Events.Handlers.Player.AimingDownSight -= OnAimingDownSight;
+        Exiled.Events.Handlers.Player.ReloadingWeapon -= OnReloadingWeapon;
+        Exiled.Events.Handlers.Player.TogglingFlashlight -= OnTogglingFlashlight;
+        Exiled.Events.Handlers.Player.DroppingItem -= OnDroppingItem;
+
         foreach (var state in States.Values)
         {
             if (state.GrabCoroutine.IsRunning)
@@ -123,6 +138,75 @@ public static class CapyToolGun
         }
     }
 
+    private static void OnShooting(ShootingEventArgs ev)
+    {
+        if (!IsHoldingToolGun(ev.Player)) return;
+
+        ev.IsAllowed = false;
+        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+        ExecutePrimaryAction(ev.Player, state);
+    }
+
+    private static void OnDryfiringWeapon(DryfiringWeaponEventArgs ev)
+    {
+        if (!IsHoldingToolGun(ev.Player)) return;
+
+        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+        ExecutePrimaryAction(ev.Player, state);
+    }
+
+    private static void OnAimingDownSight(AimingDownSightEventArgs ev)
+    {
+        if (!IsHoldingToolGun(ev.Player)) return;
+
+        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+        ExecuteSecondaryAction(ev.Player, state);
+    }
+
+    private static void OnReloadingWeapon(ReloadingWeaponEventArgs ev)
+    {
+        if (!IsHoldingToolGun(ev.Player)) return;
+
+        ev.IsAllowed = false;
+        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+
+        if (state.IsGrabbing)
+            RotateHeldObject(ev.Player, state);
+        else
+            CycleCategory(ev.Player, state);
+    }
+
+    private static void OnTogglingFlashlight(TogglingFlashlightEventArgs ev)
+    {
+        if (!IsHoldingToolGun(ev.Player)) return;
+
+        var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+
+        if (state.IsGrabbing)
+            AdjustHoldDistance(ev.Player, state);
+        else
+            CycleMode(ev.Player, state);
+    }
+
+    private static void OnDroppingItem(DroppingItemEventArgs ev)
+    {
+        if (ev.Item?.Type == ItemType.GunCOM15 && IsHoldingToolGun(ev.Player))
+        {
+            ev.IsAllowed = false;
+            var state = States.GetOrAdd(ev.Player.Id, _ => new ToolGunState());
+
+            if (state.IsGrabbing)
+            {
+                ReleaseGrab(ev.Player, state);
+                ev.Player.ShowZoneHint(HintZone.Notification, "<color=#facc15>Объект опущен на место.</color>", 1.5f, "tg_grab", 20);
+            }
+            else
+            {
+                ExecuteDeleteAction(ev.Player, state);
+            }
+        }
+    }
+
     private static void OnKeybindPressed(Player player, CustomKeybind keybind)
     {
         if (!IsHoldingToolGun(player)) return;
@@ -139,29 +223,21 @@ public static class CapyToolGun
                 ExecuteSecondaryAction(player, state);
                 break;
 
-            case CustomKeybind.F: // Inspect -> Cycle Mode or Rotate Held Object
+            case CustomKeybind.F:
                 if (state.IsGrabbing)
-                {
                     RotateHeldObject(player, state);
-                }
                 else
-                {
                     CycleMode(player, state);
-                }
                 break;
 
-            case CustomKeybind.T: // Cycle Category or Adjust Hold Distance
+            case CustomKeybind.T:
                 if (state.IsGrabbing)
-                {
                     AdjustHoldDistance(player, state);
-                }
                 else
-                {
                     CycleCategory(player, state);
-                }
                 break;
 
-            case CustomKeybind.G: // Drop / Delete
+            case CustomKeybind.G:
                 if (state.IsGrabbing)
                 {
                     ReleaseGrab(player, state);
@@ -175,11 +251,10 @@ public static class CapyToolGun
         }
     }
 
-    private static void ExecutePrimaryAction(Player player, ToolGunState state)
+    public static void ExecutePrimaryAction(Player player, ToolGunState state)
     {
         if (state.IsGrabbing)
         {
-            // Фиксация перемещаемого объекта на месте с привязкой к сетке
             LockGrabbedObject(player, state);
             return;
         }
@@ -194,7 +269,6 @@ public static class CapyToolGun
                 break;
 
             case ToolGunMode.PhysGun:
-                // Попытка захватить объект в точке прицела
                 TryStartGrab(player, state);
                 break;
 
@@ -204,45 +278,47 @@ public static class CapyToolGun
         }
     }
 
-    private static void ExecuteSecondaryAction(Player player, ToolGunState state)
+    public static void ExecuteSecondaryAction(Player player, ToolGunState state)
     {
         if (state.IsGrabbing)
         {
-            // Отпускаем захваченный объект
             ReleaseGrab(player, state);
             player.ShowZoneHint(HintZone.Notification, "<color=#facc15>Объект зафиксирован.</color>", 1.5f, "tg_grab", 20);
             return;
         }
 
-        // Захватываем объект на лету (Real-time PhysGun)
         TryStartGrab(player, state);
     }
 
-    private static void TryStartGrab(Player player, ToolGunState state)
+    public static bool TryStartGrab(Player player, ToolGunState state, string? targetSchematicName = null)
     {
-        if (Physics.Raycast(player.CameraTransform.position, player.CameraTransform.forward, out var hit, 60f))
+        Vector3 eyePos = player.CameraTransform.position;
+        Vector3 forward = player.CameraTransform.forward;
+
+        // 1. Поиск по точному лучу (RaycastAll)
+        var hits = Physics.RaycastAll(eyePos, forward, 50f);
+        foreach (var hit in hits.OrderBy(h => h.distance))
         {
-            // 1. Проверяем примитивы и вложенные схематики
+            // Проверка примитивов
             var primObj = hit.collider.GetComponentInParent<PrimitiveObjectToy>();
             if (primObj != null)
             {
                 var prim = Primitive.Get(primObj);
                 if (prim != null)
                 {
-                    // Проверяем: не является ли этот примитив частью целой схематики?
-                    var schem = SchematicLoader.SpawnedSchematics.FirstOrDefault(s => s.SpawnedPrimitives.Contains(prim));
+                    var schem = SchematicLoader.SpawnedSchematics.FirstOrDefault(s => s.SpawnedPrimitives.Contains(prim) || (s.RootObject != null && hit.collider.transform.IsChildOf(s.RootObject.transform)));
                     if (schem != null)
                     {
                         StartGrabbingSchematic(player, state, schem);
-                        return;
+                        return true;
                     }
 
                     StartGrabbingPrimitive(player, state, prim);
-                    return;
+                    return true;
                 }
             }
 
-            // 2. Проверяем источники света
+            // Проверка источников света
             var lightObj = hit.collider.GetComponentInParent<LightSourceToy>();
             if (lightObj != null)
             {
@@ -250,11 +326,11 @@ public static class CapyToolGun
                 if (light != null)
                 {
                     StartGrabbingLight(player, state, light);
-                    return;
+                    return true;
                 }
             }
 
-            // 3. Проверяем физические предметы на полу (Pickups)
+            // Проверка предметов на полу
             var pickupBase = hit.collider.GetComponentInParent<InventorySystem.Items.Pickups.ItemPickupBase>();
             if (pickupBase != null)
             {
@@ -262,15 +338,44 @@ public static class CapyToolGun
                 if (pickup != null)
                 {
                     StartGrabbingPickup(player, state, pickup);
-                    return;
+                    return true;
                 }
             }
         }
 
-        player.ShowZoneHint(HintZone.Notification, "<color=#ff4444>Наведите луч на объект для захвата.</color>", 1.5f, "tg_grab", 20);
+        // 2. Поиск ближайшей схематики по конусу взгляда (если примитивы тонкие или без коллизии)
+        SchematicObject? bestSchem = null;
+        float bestAngle = 35f;
+
+        foreach (var schem in SchematicLoader.SpawnedSchematics)
+        {
+            if (schem.IsDestroyed) continue;
+            if (!string.IsNullOrEmpty(targetSchematicName) && !schem.Name.Equals(targetSchematicName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            Vector3 dir = schem.Position - eyePos;
+            float dist = dir.magnitude;
+            if (dist > 30f) continue;
+
+            float angle = Vector3.Angle(forward, dir);
+            if (angle < bestAngle)
+            {
+                bestAngle = angle;
+                bestSchem = schem;
+            }
+        }
+
+        if (bestSchem != null)
+        {
+            StartGrabbingSchematic(player, state, bestSchem);
+            return true;
+        }
+
+        player.ShowZoneHint(HintZone.Notification, "<color=#ff4444>Наведите прицел на объект или схематику.</color>", 1.5f, "tg_grab", 20);
+        return false;
     }
 
-    private static void StartGrabbingPrimitive(Player player, ToolGunState state, Primitive prim)
+    public static void StartGrabbingPrimitive(Player player, ToolGunState state, Primitive prim)
     {
         ReleaseGrab(player, state);
 
@@ -281,10 +386,10 @@ public static class CapyToolGun
 
         state.GrabCoroutine = Timing.RunCoroutine(RealtimeGrabCoroutine(player, state));
 
-        player.ShowZoneHint(HintZone.Notification, $"<color=#38bdf8>🧲 Захвачен примитив <b>{prim.Type}</b>!</color>\n<size=14><color=#c2c2c2>[ЛКМ]: Поставить • [F]: Повернуть • [T]: Дистанция</color></size>", 3.0f, "tg_grab", 20);
+        player.ShowZoneHint(HintZone.Notification, $"<color=#38bdf8>🧲 Захвачен примитив <b>{prim.Type}</b>!</color>\n<size=14><color=#c2c2c2>[ЛКМ]: Поставить • [F/R]: Повернуть • [T]: Дистанция</color></size>", 3.0f, "tg_grab", 20);
     }
 
-    private static void StartGrabbingSchematic(Player player, ToolGunState state, SchematicObject schem)
+    public static void StartGrabbingSchematic(Player player, ToolGunState state, SchematicObject schem)
     {
         ReleaseGrab(player, state);
 
@@ -295,10 +400,10 @@ public static class CapyToolGun
 
         state.GrabCoroutine = Timing.RunCoroutine(RealtimeGrabCoroutine(player, state));
 
-        player.ShowZoneHint(HintZone.Notification, $"<color=#38bdf8>🧲 Захвачена вся схематика <b>{schem.Name}</b>!</color>\n<size=14><color=#c2c2c2>[ЛКМ]: Поставить • [F]: Повернуть • [T]: Дистанция</color></size>", 3.0f, "tg_grab", 20);
+        player.ShowZoneHint(HintZone.Notification, $"<color=#38bdf8>🧲 Захвачена вся схематика <b>{schem.Name}</b>!</color>\n<size=14><color=#c2c2c2>[ЛКМ]: Поставить • [F/R]: Повернуть • [T]: Дистанция</color></size>", 3.0f, "tg_grab", 20);
     }
 
-    private static void StartGrabbingLight(Player player, ToolGunState state, Light light)
+    public static void StartGrabbingLight(Player player, ToolGunState state, Light light)
     {
         ReleaseGrab(player, state);
 
@@ -312,7 +417,7 @@ public static class CapyToolGun
         player.ShowZoneHint(HintZone.Notification, "<color=#ffd285>🧲 Захвачен Источник Света!</color>", 2.5f, "tg_grab", 20);
     }
 
-    private static void StartGrabbingPickup(Player player, ToolGunState state, Pickup pickup)
+    public static void StartGrabbingPickup(Player player, ToolGunState state, Pickup pickup)
     {
         ReleaseGrab(player, state);
 
@@ -335,7 +440,6 @@ public static class CapyToolGun
                 Vector3 targetPos = player.CameraTransform.position + (player.CameraTransform.forward * state.HoldDistance);
                 Quaternion targetRot = player.Rotation * state.HoldRelativeRotation;
 
-                // Применяем привязку к сетке если активна
                 if (state.GridSnap > 0.01f)
                 {
                     targetPos = new Vector3(
@@ -400,7 +504,7 @@ public static class CapyToolGun
         player.ShowZoneHint(HintZone.Notification, "<color=#a3e635>🔒 Объект зафиксирован на месте!</color>", 1.5f, "tg_lock", 20);
     }
 
-    private static void ReleaseGrab(Player? player, ToolGunState state)
+    public static void ReleaseGrab(Player? player, ToolGunState state)
     {
         state.IsGrabbing = false;
         if (state.GrabCoroutine.IsRunning)
@@ -568,8 +672,8 @@ public static class CapyToolGun
                         : "Объект";
 
             return $"<size=20><color=#38bdf8><b>[ CapyStudio PhysGun ]</b></color></size>\n" +
-                   $"<size=15><color=#a3e635>🧲 Захвачено: <b>{heldName}</b></color> • Дист: <color=#fcd34d><b>{state.HoldDistance:F1}м</b></color> [T]\n" +
-                   $"<color=#ffffff>[ЛКМ]: Зафиксировать • [F]: Повернуть (+{state.RotationStep}°) • [G]: Отпустить</color></size>";
+                   $"<size=15><color=#a3e635>🧲 Захвачено: <b>{heldName}</b></color> • Дист: <color=#fcd34d><b>{state.HoldDistance:F1}м</b></color> [T/Фонарик]\n" +
+                   $"<color=#ffffff>[ЛКМ/Выстрел]: Поставить • [ПКМ/Прицел]: Захват • [F/R]: Поворот</color></size>";
         }
 
         string selectedName = state.Category switch
@@ -584,7 +688,7 @@ public static class CapyToolGun
         string snapStr = state.GridSnap <= 0.01f ? "Выкл" : $"{state.GridSnap:F2}м";
 
         return $"<size=20><color=#38bdf8><b>[ CapyStudio ToolGun ]</b></color></size>\n" +
-               $"<size=15><color=#ffffff>Режим: <color=#a3e635><b>{state.Mode}</b></color> [F] • Категория: <color=#ffa94e><b>{state.Category}</b></color> [T]\n" +
+               $"<size=15><color=#ffffff>Режим: <color=#a3e635><b>{state.Mode}</b></color> • Категория: <color=#ffa94e><b>{state.Category}</b></color> [R]\n" +
                $"Выбрано: <color=#67e8f9><b>{selectedName}</b></color> • Сетка: <color=#fcd34d><b>{snapStr}</b></color> • Масштаб: <color=#f472b6><b>{state.CurrentScale:F1}x</b></color>\n" +
                $"<color=#c2c2c2>[ЛКМ]: Спавн • [ПКМ]: 🧲 Захват лучом (PhysGun) • [G]: Удалить</color></size>";
     }

@@ -300,7 +300,16 @@ public sealed class GrabCommand : ICommand
             CapyToolGun.ToggleToolGun(player, out _);
         }
 
-        response = "<color=green>[PHYSGUN]</color> Наведите COM-15 на объект и нажмите <b>ПКМ</b> для захвата!";
+        string? targetName = arguments.Count > 0 ? arguments.At(0) : null;
+        var state = new ToolGunState();
+
+        if (CapyToolGun.TryStartGrab(player, state, targetName))
+        {
+            response = "<color=green>[PHYSGUN]</color> Объект успешно захвачен в реальном времени!";
+            return true;
+        }
+
+        response = "<color=yellow>[PHYSGUN]</color> Наведите прицел на схематику или укажите имя: <b>.grab SCP120</b>";
         return true;
     }
 }
