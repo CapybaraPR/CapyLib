@@ -92,8 +92,8 @@ public class SpectatorBottomPanel : HudPanel
 
         string text = config.SpectatorBottomPanel
             .Replace("{spectating}", fullSpectatingStr)
-            .Replace("{playersCurrent}", Player.List.Count(p => p is not null && !p.IsHost).ToString())
-            .Replace("{spectators}", Player.List.Count(p => p is not null && !p.IsAlive && !p.IsHost).ToString())
+            .Replace("{playersCurrent}", Player.List.Count(p => p is not null && !p.IsHost && p.IsAlive && p.Role.Type != RoleTypeId.Tutorial).ToString())
+            .Replace("{spectators}", Player.List.Count(p => p is not null && !p.IsAlive && !p.IsHost && p.Role.Type == RoleTypeId.Spectator).ToString())
             .Replace("{playersMax}", Server.MaxPlayerCount.ToString())
             .Replace("{serverBrand}", config.ServerBrandHintText);
 

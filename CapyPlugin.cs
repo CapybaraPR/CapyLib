@@ -53,6 +53,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         SafeExecute("Database", InitializeDatabase);
         SafeExecute("Placeholders", PlaceholderReplacer.RegisterDefaults);
         SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);
+        SafeExecute("AssKeybinds", Capy.Engine.ServerSpecific.AssKeybinds.Initialize);
         SafeExecute("HudModule", Capy.Engine.Hud.HudModule.Enable);
         if (!_modulesDeferred)
             SafeExecute("ModuleLoader", InitializeModules);
