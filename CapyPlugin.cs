@@ -52,7 +52,9 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
 
         SafeExecute("Database", InitializeDatabase);
         SafeExecute("Placeholders", PlaceholderReplacer.RegisterDefaults);
-        SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);        if (!_modulesDeferred)
+        SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);
+        SafeExecute("HudModule", Capy.Engine.Hud.HudModule.Enable);
+        if (!_modulesDeferred)
             SafeExecute("ModuleLoader", InitializeModules);
 
         SafeExecute("ServerBanner", ServerBanner.Show);
@@ -73,6 +75,7 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
             LicenseManager.LicenseConfirmed -= OnLicenseConfirmed;
             LicenseManager.Stop();
         });
+        SafeExecute("HudModule.Disable", Capy.Engine.Hud.HudModule.Disable);
         SafeExecute("PlayerStateCleaner", PlayerStateCleaner.Shutdown);
         SafeExecute("CustomRoles.Disable", CustomRolesManager.UnregisterAll);
         SafeExecute("CustomItems.Disable", CustomItemsManager.UnregisterAll);
