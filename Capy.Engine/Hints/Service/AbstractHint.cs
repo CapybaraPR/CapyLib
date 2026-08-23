@@ -12,6 +12,7 @@ public class AbstractHint
     public HintVerticalAlign YCoordinateAlign { get; set; } = HintVerticalAlign.Middle;
     public HintAlignment Alignment { get; set; } = HintAlignment.Center;
     public string Tag { get; set; } = "default";
+    public HintZone Zone { get; set; } = HintZone.Notification;
     public HintLayer Layer { get; set; } = HintLayer.Notification;
     public int Priority { get; set; } = 0;
     public HintSyncSpeed SyncSpeed { get; set; } = HintSyncSpeed.Fast;
