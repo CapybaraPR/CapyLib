@@ -1,6 +1,6 @@
 using Capy.Core.Features;
 using Capy.Engine.Hints.Extensions;
-using Capy.Engine.Hints.Service;
+using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
 using Exiled.Events.EventArgs.Player;
 
@@ -47,8 +47,8 @@ public static class PlayerStateCleaner
 
         try
         {
-            ShowHintExtensions.CleanupPlayer(player.Id);
-            PlayerDisplay.Remove(player);
+            ShowHintExtensions.CleanupPlayer(player);
+            PlayerDisplay.RemovePlayer(player);
             GlobalCooldown.RemoveAllOwnedBy(player);
             GlobalCooldown.RemoveAllOwnedBy(player.UserId);
             PlayerData.Remove(player.UserId);

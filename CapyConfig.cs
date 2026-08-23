@@ -44,4 +44,7 @@ public class CapyConfig : IConfig
 
     [Description("Включить автоматический сбор и отправку статистики/телеметрии")]
     public bool EnableStatsTracker { get; set; } = true;
+
+    [Description("Настройки экранного интерфейса HUD и наблюдателей")]
+    public Capy.Engine.Hud.Config.HudConfig Hud { get; set; } = new();
 }

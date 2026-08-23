@@ -1,55 +1,106 @@
 using System;
 using System.Linq;
-using System.Text;
-using Capy.Engine.Hints;
+using Capy.Engine.CustomItems.Manager;
+using Capy.Engine.CustomRoles.Manager;
+using Capy.Engine.Hints.Enum;
+using Capy.Engine.Hints.Models;
+using Capy.Engine.Hints.Utilities;
+using Capy.Engine.Hud.Config;
 using Exiled.API.Features;
 using PlayerRoles;
+using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hud.Panels;
 
-/// <summary>
-/// Нижняя информационная панель для наблюдателей (информация об игроке, за которым смотрят).
-/// </summary>
-public sealed class SpectatorBottomPanel : HudPanel
+public class SpectatorBottomPanel : HudPanel
 {
+    private string _lastText = string.Empty;
+
     public SpectatorBottomPanel(Player player) : base(player) { }
+
+    protected override void CreateHint(PlayerDisplay display)
+    {
+        Hint = new Hint
+        {
+            Text = string.Empty,
+            FontSize = 20,
+            Alignment = HintAlignment.Center,
+            XCoordinate = 0,
+            YCoordinate = 950,
+            YCoordinateAlign = HintVerticalAlign.Top,
+            SyncSpeed = HintSyncSpeed.Fast
+        };
+        display.AddHint(Hint);
+    }
 
     public override void Update()
     {
-        if (!IsConnected || Player.IsAlive || Player.Role.Type != RoleTypeId.Spectator || !Round.IsStarted)
+        if (!IsPlayerConnected || Player.IsAlive
+            || Player.Role.Type is RoleTypeId.Overwatch or RoleTypeId.Destroyed
+            || !Round.IsStarted)
         {
-            SetText(string.Empty, HintZone.BottomCenter);
+            if (!string.IsNullOrEmpty(_lastText))
+            {
+                SetText(string.Empty);
+                _lastText = string.Empty;
+            }
             return;
         }
 
-        var target = HudModule.GetSpectatedTarget(Player);
+        if (!EnsureHint()) return;
 
-        var sb = new StringBuilder();
+        var config = CapyPlugin.Instance?.Config?.Hud ?? new HudConfig();
+        if (config == null || !config.Enabled) return;
 
-        if (target != null && target.IsConnected && target.IsAlive)
+        string spectating = "—";
+        string roleInfo = string.Empty;
+        string hpInfo = string.Empty;
+        string itemInfo = string.Empty;
+
+        var target = Player.List
+            .Where(p => p is not null && p.IsAlive)
+            .FirstOrDefault(p => p.CurrentSpectatingPlayers != null && p.CurrentSpectatingPlayers.Contains(Player));
+
+        if (target != null)
         {
-            string roleName = target.Role.Type.ToString();
-            string hp = $"<color=#ff4444>❤️ {(int)target.Health}/{(int)target.MaxHealth} HP</color>";
+            spectating = target.Nickname;
 
-            if (target.ArtificialHealth > 0)
-                hp += $" <color=#38bdf8>🛡️ {(int)target.ArtificialHealth} AHP</color>";
+            var customRole = CustomRolesManager.GetRole(target);
+            if (customRole != null)
+            {
+                roleInfo = $" <color=#ffa94e><b>[{customRole.Name}]</b></color>";
+            }
+            else
+            {
+                string hex = UnityEngine.ColorUtility.ToHtmlStringRGBA(target.Role.Color);
+                roleInfo = $" <color=#{hex}><b>[{target.Role.Name}]</b></color>";
+            }
 
-            if (target.HumeShield > 0)
-                hp += $" <color=#a855f7>⚡ {(int)target.HumeShield} HS</color>";
+            int hp = (int)Math.Max(0, target.Health);
+            int maxHp = (int)target.MaxHealth;
+            int ahp = (int)target.ArtificialHealth;
+            string ahpText = ahp > 0 ? $" <color=#70c0ff>(+{ahp} AHP)</color>" : "";
+            hpInfo = $" | <color=#ff4444>❤️ <b>{hp}</b>/{maxHp} HP</color>{ahpText}";
 
-            string heldItemName = target.CurrentItem != null ? target.CurrentItem.Type.ToString() : "Кулаки";
-
-            sb.AppendLine($"<color=#b8b8b8>Наблюдаю за:</color> <color=#ffa94e><b>{target.Nickname}</b></color> <color=#999999>({roleName})</color>");
-            sb.AppendLine($"{hp}  |  <color=#a3e635>📦 {heldItemName}</color>");
+            if (target.CurrentItem != null)
+            {
+                itemInfo = $" | ✋ <color=#a3e635>{target.CurrentItem.Type}</color>";
+            }
         }
-        else
+
+        string fullSpectatingStr = $"{spectating}{roleInfo}{hpInfo}{itemInfo}";
+
+        string text = config.SpectatorBottomPanel
+            .Replace("{spectating}", fullSpectatingStr)
+            .Replace("{playersCurrent}", Player.List.Count(p => p is not null && !p.IsHost).ToString())
+            .Replace("{spectators}", Player.List.Count(p => p is not null && !p.IsAlive && !p.IsHost).ToString())
+            .Replace("{playersMax}", Server.MaxPlayerCount.ToString())
+            .Replace("{serverBrand}", config.ServerBrandHintText);
+
+        if (text != _lastText)
         {
-            int aliveCount = Player.List.Count(p => p.IsAlive);
-            int specCount = Player.List.Count(p => !p.IsAlive && p.Role.Type == RoleTypeId.Spectator);
-            sb.AppendLine($"<color=#ffa94e><b>РЕЖИМ НАБЛЮДАТЕЛЯ</b></color>");
-            sb.AppendLine($"<color=#c2c2c2>Живых: <color=#a3e635>{aliveCount}</color>  |  Зрителей: <color=#ffa94e>{specCount}</color></color>");
+            SetText(text);
+            _lastText = text;
         }
-
-        SetText(sb.ToString().TrimEnd(), HintZone.BottomCenter, fontSize: 19, tag: "hud_spectator_bottom");
     }
 }

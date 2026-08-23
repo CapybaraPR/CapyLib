@@ -1,79 +1,76 @@
-using System;
-using Capy.Engine.Hints;
-using Capy.Engine.Hints.Service;
+﻿using System;
+using Capy.Engine.Hints.Models;
+using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
+using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hud;
 
-/// <summary>
-/// Базовый класс информационной панели интерфейса HUD.
-/// </summary>
 public abstract class HudPanel
 {
     public Player Player { get; }
-    protected AbstractHint? Hint { get; set; }
-    protected string LastText { get; set; } = string.Empty;
+    protected Hint? Hint { get; set; }
 
     protected HudPanel(Player player)
     {
         Player = player ?? throw new ArgumentNullException(nameof(player));
     }
 
-    protected bool IsConnected => Player != null && Player.IsConnected;
+    protected bool IsPlayerConnected => Player != null && Player.ReferenceHub != null && Player.ReferenceHub.connectionToClient != null && Player.ReferenceHub.connectionToClient.isReady && Player.Role.Type != PlayerRoles.RoleTypeId.None;
+
+    protected bool EnsureHint()
+    {
+        if (Hint != null) return true;
+        if (!IsPlayerConnected) return false;
+
+        var display = PlayerDisplay.Get(Player);
+        if (display == null) return false;
+
+        try
+        {
+            display.SetMinUpdateInterval(TimeSpan.FromMilliseconds(50));
+            CreateHint(display);
+            display.ForceUpdate(true);
+            return Hint != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    protected abstract void CreateHint(PlayerDisplay display);
 
     public abstract void Update();
 
-    protected void SetText(string text, HintZone zone, int fontSize = 20, string tag = "hud_panel")
+    protected void SetText(string text)
     {
-        if (!IsConnected) return;
-
-        var display = PlayerDisplay.Get(Player);
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            if (Hint != null)
-            {
-                display.RemoveHint(Hint);
-                Hint = null;
-                LastText = string.Empty;
-            }
-            return;
-        }
-
-        if (text == LastText && Hint != null)
-            return;
-
-        LastText = text;
-
-        if (Hint == null)
-        {
-            Hint = new AbstractHint
-            {
-                Text = text,
-                FontSize = fontSize,
-                Tag = tag,
-                Zone = zone,
-                Layer = HintLayer.Notification,
-                Priority = 0
-            };
-            display.AddHint(Hint);
-        }
-        else
+        if (Hint != null && Hint.Text != text)
         {
             Hint.Text = text;
-            Hint.FontSize = fontSize;
-            Hint.Zone = zone;
-            display.Render();
+            if (IsPlayerConnected)
+            {
+                var display = PlayerDisplay.Get(Player);
+                display?.ForceUpdate(true);
+            }
         }
     }
 
     public virtual void Destroy()
     {
-        if (Hint != null && IsConnected)
+        if (Hint != null && Player != null)
         {
-            PlayerDisplay.Get(Player).RemoveHint(Hint);
+            try
+            {
+                var display = PlayerDisplay.Get(Player);
+                if (display != null)
+                {
+                    display.RemoveHint(Hint);
+                    display.ForceUpdate(true);
+                }
+            }
+            catch { }
             Hint = null;
         }
-        LastText = string.Empty;
     }
 }

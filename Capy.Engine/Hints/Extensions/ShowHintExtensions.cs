@@ -1,22 +1,26 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using Capy.Engine.Hints.Service;
+using Capy.Engine.Hints.Enum;
+using Capy.Engine.Hints.Models;
+using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
 using MEC;
+using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hints.Extensions;
 
 /// <summary>
 /// Набор удобных методов расширения для вывода подсказок и элементов интерфейса в различные зоны экрана.
+/// Использует пиксельно-точную систему позиционирования AspectLib / SpecterLib.
 /// </summary>
 public static class ShowHintExtensions
 {
-    private static readonly ConcurrentDictionary<int, Dictionary<string, AbstractHint>> TaggedHints = new();
+    private static readonly ConcurrentDictionary<int, Dictionary<string, Hint>> TaggedHints = new();
     private static readonly ConcurrentDictionary<int, Dictionary<string, CoroutineHandle>> ExpiryHandles = new();
 
     /// <summary>
-    /// Вывести подсказку в заданную зону экрана (UpperLeft, UpperRight, LowerLeft, LowerCenter, BottomCenter, Notification).
+    /// Вывести подсказку в заданную зону экрана с точным расчетом экранных координат.
     /// </summary>
     public static void ShowZoneHint(this Player player, HintZone zone, string message, float duration = 3f, string tag = "default", int fontSize = 22)
     {
@@ -26,17 +30,23 @@ public static class ShowHintExtensions
         KillExpiry(player.Id, tag);
         player.ClearCapyHint(tag);
 
-        var hint = new AbstractHint
+        var (x, y, align, vAlign) = GetZoneCoordinates(zone);
+
+        var hint = new Hint
         {
             Text = message,
             FontSize = fontSize,
             Tag = tag,
-            Zone = zone,
+            XCoordinate = x,
+            YCoordinate = y,
+            Alignment = align,
+            YCoordinateAlign = vAlign,
             Layer = HintLayer.Notification,
-            Priority = 0
+            Priority = 0,
+            SyncSpeed = HintSyncSpeed.Fast
         };
 
-        var dict = TaggedHints.GetOrAdd(player.Id, _ => new Dictionary<string, AbstractHint>());
+        var dict = TaggedHints.GetOrAdd(player.Id, _ => new Dictionary<string, Hint>());
         dict[tag] = hint;
 
         display.AddHint(hint);
@@ -54,7 +64,7 @@ public static class ShowHintExtensions
     }
 
     /// <summary>
-    /// Вывести стандартную подсказку (Notification / Center).
+    /// Вывести стандартную подсказку по центру экрана (Notification).
     /// </summary>
     public static void ShowCapyHint(this Player player, string message, float duration = 3f, string tag = "default", int fontSize = 24)
     {
@@ -62,106 +72,82 @@ public static class ShowHintExtensions
     }
 
     /// <summary>
-    /// Карточка предмета в руках (LowerCenter): название, описание и привязки клавиш.
+    /// Вывести широковещательное системное оповещение вверху экрана (TopCenter).
     /// </summary>
-    public static void ShowItemInfo(this Player player, string title, string description, string keybinds = "", float duration = 3.5f)
+    public static void ShowAnnouncement(this Player player, string message, float duration = 5f, string title = "СИСТЕМНОЕ ОПОВЕЩЕНИЕ")
     {
-        string text = $"<color=#ffa94e><b>{title}</b></color>";
-        if (!string.IsNullOrEmpty(description))
-            text += $"\n<color=#c2c2c2><size=18>{description}</size></color>";
-        if (!string.IsNullOrEmpty(keybinds))
-            text += $"\n<color=#ffd285><size=16>{keybinds}</size></color>";
-
-        player.ShowZoneHint(HintZone.LowerCenter, text, duration, "item_info", 20);
+        string formatted = $"<b><color=#ffa94e><size=24>[ {title} ]</size></color></b>\n<size=20><color=#ffffff>{message}</color></size>";
+        player.ShowZoneHint(HintZone.TopCenter, formatted, duration, "system_announcement", 22);
     }
 
     /// <summary>
-    /// Отображение кулдауна способности или предмета (LowerLeft).
+    /// Вывести широковещательное оповещение всем игрокам на сервере.
     /// </summary>
-    public static void ShowAbilityCooldown(this Player player, string abilityName, float remainingSeconds, float totalSeconds)
-    {
-        int progressPercent = totalSeconds > 0 ? (int)((1f - (remainingSeconds / totalSeconds)) * 100f) : 100;
-        string bar = GetProgressBar(progressPercent);
-        string text = $"<color=#ffd285><b>{abilityName}</b></color> <color=#ffa94e>{remainingSeconds:F1}с</color>\n{bar}";
-
-        player.ShowZoneHint(HintZone.LowerLeft, text, 1.2f, $"cd_{abilityName}", 18);
-    }
-
-    /// <summary>
-    /// Уведомление о подборе / выбросе предмета (BottomCenter).
-    /// </summary>
-    public static void ShowItemPickup(this Player player, string itemName, bool isPickup = true, float duration = 2.0f)
-    {
-        string icon = isPickup ? "➕ <color=#a3e635>Получено:</color>" : "➖ <color=#f87171>Выброшено:</color>";
-        string text = $"{icon} <color=#ffffff><b>{itemName}</b></color>";
-
-        player.ShowZoneHint(HintZone.BottomCenter, text, duration, "pickup_toast", 19);
-    }
-
-    /// <summary>
-    /// Отображение хитмаркера и урона при стрельбе (BottomCenter).
-    /// </summary>
-    public static void ShowHitmarker(this Player player, float damage, bool isKill = false)
-    {
-        string text = isKill
-            ? "<color=#ff0000><b>💀 УБИТ!</b></color>"
-            : $"<color=#ff4444><b>-{(int)damage} HP</b></color>";
-
-        player.ShowZoneHint(HintZone.BottomCenter, text, 1.0f, "hitmarker", 20);
-    }
-
-    /// <summary>
-    /// Вывод важного серверного оповещения через HUD (полная замена Map.Broadcast / Player.Broadcast).
-    /// </summary>
-    public static void ShowAnnouncement(this Player player, string message, float duration = 5.0f, string tag = "server_announcement")
-    {
-        player.ShowZoneHint(HintZone.Notification, message, duration, tag, 24);
-    }
-
-    /// <summary>
-    /// Отправить объявление всем игрокам сервера через HUD.
-    /// </summary>
-    public static void ShowAnnouncementToAll(string message, float duration = 5.0f, string tag = "server_announcement")
+    public static void ShowAnnouncementToAll(string message, float duration = 5f, string title = "ОПОВЕЩЕНИЕ СЕРВЕРА")
     {
         foreach (var player in Player.List)
         {
             if (player != null && player.IsConnected)
-                player.ShowAnnouncement(message, duration, tag);
+                player.ShowAnnouncement(message, duration, title);
         }
     }
 
-    public static void ClearCapyHint(this Player player, string tag)
+    /// <summary>
+    /// Удалить подсказку по ее тегу.
+    /// </summary>
+    public static void ClearCapyHint(this Player player, string tag = "default")
     {
-        if (player == null || string.IsNullOrEmpty(tag)) return;
+        if (player == null) return;
+
+        KillExpiry(player.Id, tag);
 
         if (TaggedHints.TryGetValue(player.Id, out var dict))
         {
-            if (dict.TryGetValue(tag, out var hint) && PlayerDisplay.Get(player) is { } display)
-                display.RemoveHint(hint);
-
-            dict.Remove(tag);
-        }
-
-        KillExpiry(player.Id, tag);
-    }
-
-    public static void CleanupPlayer(int playerId)
-    {
-        TaggedHints.TryRemove(playerId, out _);
-        if (ExpiryHandles.TryRemove(playerId, out var dict))
-        {
-            foreach (var handle in dict.Values)
-                Timing.KillCoroutines(handle);
-        }
-    }
-
-    private static void RemoveTaggedHint(int playerId, string tag, AbstractHint hint)
-    {
-        if (TaggedHints.TryGetValue(playerId, out var dict))
-        {
-            if (dict.TryGetValue(tag, out var existing) && ReferenceEquals(existing, hint))
+            if (dict.TryGetValue(tag, out var hint))
+            {
                 dict.Remove(tag);
+                PlayerDisplay.Get(player).RemoveHint(hint);
+            }
         }
+    }
+
+    /// <summary>
+    /// Очистить все активные подсказки игрока.
+    /// </summary>
+    public static void CleanupPlayer(Player player)
+    {
+        if (player == null) return;
+
+        if (ExpiryHandles.TryRemove(player.Id, out var handles))
+        {
+            foreach (var handle in handles.Values)
+                Timing.KillCoroutines(handle);
+            handles.Clear();
+        }
+
+        if (TaggedHints.TryRemove(player.Id, out var dict))
+        {
+            var display = PlayerDisplay.Get(player);
+            foreach (var hint in dict.Values)
+            {
+                display.RemoveHint(hint);
+            }
+            dict.Clear();
+        }
+    }
+
+    private static (float x, float y, HintAlignment align, HintVerticalAlign vAlign) GetZoneCoordinates(HintZone zone)
+    {
+        return zone switch
+        {
+            HintZone.TopCenter => (0f, 60f, HintAlignment.Center, HintVerticalAlign.Top),
+            HintZone.UpperLeft => (-420f, 120f, HintAlignment.Left, HintVerticalAlign.Top),
+            HintZone.UpperRight => (420f, 120f, HintAlignment.Right, HintVerticalAlign.Top),
+            HintZone.LowerLeft => (-420f, 750f, HintAlignment.Left, HintVerticalAlign.Middle),
+            HintZone.LowerCenter => (0f, 720f, HintAlignment.Center, HintVerticalAlign.Middle),
+            HintZone.BottomCenter => (0f, 850f, HintAlignment.Center, HintVerticalAlign.Top),
+            _ => (0f, 150f, HintAlignment.Center, HintVerticalAlign.Top)
+        };
     }
 
     private static void StoreExpiry(int playerId, string tag, CoroutineHandle handle)
@@ -172,19 +158,24 @@ public static class ShowHintExtensions
 
     private static void KillExpiry(int playerId, string tag)
     {
-        if (ExpiryHandles.TryGetValue(playerId, out var dict) && dict.TryGetValue(tag, out var handle))
+        if (ExpiryHandles.TryGetValue(playerId, out var dict))
         {
-            Timing.KillCoroutines(handle);
-            dict.Remove(tag);
+            if (dict.TryGetValue(tag, out var handle))
+            {
+                Timing.KillCoroutines(handle);
+                dict.Remove(tag);
+            }
         }
     }
 
-    private static string GetProgressBar(int percent, int totalSegments = 10)
+    private static void RemoveTaggedHint(int playerId, string tag, Hint hint)
     {
-        percent = Math.Max(0, Math.Min(100, percent));
-        int filled = (percent * totalSegments) / 100;
-        int empty = totalSegments - filled;
-
-        return $"<color=#a3e635>{new string('■', filled)}</color><color=#555555>{new string('■', empty)}</color>";
+        if (TaggedHints.TryGetValue(playerId, out var dict))
+        {
+            if (dict.TryGetValue(tag, out var existing) && existing == hint)
+            {
+                dict.Remove(tag);
+            }
+        }
     }
 }

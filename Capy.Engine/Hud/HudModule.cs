@@ -1,18 +1,16 @@
-using System;
-using System.Collections.Concurrent;
-using Exiled.API.Features;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Exiled.Events.EventArgs.Player;
 using PlayerHandlers = Exiled.Events.Handlers.Player;
+using Exiled.API.Features;
 
 namespace Capy.Engine.Hud;
 
-/// <summary>
-/// Главный контроллер экранного HUD и наблюдателей ядра CapyLib.
-/// </summary>
 public static class HudModule
 {
-    private static readonly ConcurrentDictionary<int, PlayerHud> Huds = new();
-    private static readonly ConcurrentDictionary<int, int> SpectatedTargetIds = new();
+    private static readonly Dictionary<Player, PlayerHud> Huds = new();
+    private static readonly Dictionary<Player, Player> SpectatedTargets = new();
     private static bool _isEnabled;
 
     public static void Enable()
@@ -23,14 +21,13 @@ public static class HudModule
         PlayerHandlers.Verified += OnPlayerVerified;
         PlayerHandlers.Left += OnPlayerLeft;
         PlayerHandlers.ChangingSpectatedPlayer += OnChangingSpectatedPlayer;
+        PlayerHandlers.Died += OnPlayerDied;
 
         foreach (var player in Player.List)
         {
-            if (player != null && player.IsConnected && !player.IsNPC)
-                Huds[player.Id] = new PlayerHud(player);
+            if (player != null && !player.IsHost)
+                Huds[player] = new PlayerHud(player);
         }
-
-        Log.Info("[HudModule] Система экранного HUD и HUD наблюдателей активирована.");
     }
 
     public static void Disable()
@@ -41,52 +38,73 @@ public static class HudModule
         PlayerHandlers.Verified -= OnPlayerVerified;
         PlayerHandlers.Left -= OnPlayerLeft;
         PlayerHandlers.ChangingSpectatedPlayer -= OnChangingSpectatedPlayer;
+        PlayerHandlers.Died -= OnPlayerDied;
 
         foreach (var hud in Huds.Values)
         {
-            try { hud.Destroy(); } catch { }
+            try { hud.Destroy(); }
+            catch { }
         }
         Huds.Clear();
-        SpectatedTargetIds.Clear();
+        SpectatedTargets.Clear();
     }
 
     public static Player? GetSpectatedTarget(Player spectator)
     {
         if (spectator == null) return null;
-
-        if (SpectatedTargetIds.TryGetValue(spectator.Id, out int targetId))
+        if (SpectatedTargets.TryGetValue(spectator, out var target) && target != null && target.IsAlive)
         {
-            var target = Player.Get(targetId);
-            if (target != null && target.IsConnected && target.IsAlive)
-                return target;
+            return target;
         }
 
-        return Player.List.FirstOrDefault(p => p != null && p.IsConnected && p.IsAlive && p.CurrentSpectatingPlayers != null && p.CurrentSpectatingPlayers.Contains(spectator));
+        return Player.List.FirstOrDefault(p => p != null && p.IsAlive && p.CurrentSpectatingPlayers != null && p.CurrentSpectatingPlayers.Contains(spectator));
     }
 
     private static void OnPlayerVerified(VerifiedEventArgs ev)
     {
-        if (ev.Player != null && !ev.Player.IsNPC)
-            Huds[ev.Player.Id] = new PlayerHud(ev.Player);
+        if (ev.Player != null && !ev.Player.IsHost && !Huds.ContainsKey(ev.Player))
+        {
+            Huds[ev.Player] = new PlayerHud(ev.Player);
+        }
     }
 
     private static void OnPlayerLeft(LeftEventArgs ev)
     {
-        if (ev.Player == null) return;
-
-        if (Huds.TryRemove(ev.Player.Id, out var hud))
-            hud.Destroy();
-
-        SpectatedTargetIds.TryRemove(ev.Player.Id, out _);
+        if (ev.Player != null)
+        {
+            if (Huds.TryGetValue(ev.Player, out var hud))
+            {
+                hud.Destroy();
+                Huds.Remove(ev.Player);
+            }
+            SpectatedTargets.Remove(ev.Player);
+        }
     }
 
     private static void OnChangingSpectatedPlayer(ChangingSpectatedPlayerEventArgs ev)
     {
-        if (ev.Player == null) return;
+        if (ev.Player != null)
+        {
+            if (ev.NewTarget != null && ev.NewTarget.IsAlive)
+            {
+                SpectatedTargets[ev.Player] = ev.NewTarget;
+            }
+            else
+            {
+                SpectatedTargets.Remove(ev.Player);
+            }
+        }
+    }
 
-        if (ev.NewTarget != null && ev.NewTarget.IsAlive)
-            SpectatedTargetIds[ev.Player.Id] = ev.NewTarget.Id;
-        else
-            SpectatedTargetIds.TryRemove(ev.Player.Id, out _);
+    private static void OnPlayerDied(DiedEventArgs ev)
+    {
+        if (ev.Player != null)
+        {
+            var spectators = SpectatedTargets.Where(kvp => kvp.Value == ev.Player).Select(kvp => kvp.Key).ToList();
+            foreach (var spectator in spectators)
+            {
+                SpectatedTargets.Remove(spectator);
+            }
+        }
     }
 }

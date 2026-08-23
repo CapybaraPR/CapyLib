@@ -1,44 +1,73 @@
+﻿using System;
 using System.Linq;
-using Capy.Engine.Hints;
+using Capy.Engine.Hints.Enum;
+using Capy.Engine.Hints.Models;
+using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
+using MapGeneration.Distributors;
+using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hud.Panels;
 
-/// <summary>
-/// Панель статуса включенных генераторов в комплексе.
-/// </summary>
-public sealed class GeneratorStatusPanel : HudPanel
+public class GeneratorStatusPanel : HudPanel
 {
+    private string _lastText = string.Empty;
+
     public GeneratorStatusPanel(Player player) : base(player) { }
+
+    protected override void CreateHint(PlayerDisplay display)
+    {
+        Hint = new Hint
+        {
+            Text = string.Empty,
+            FontSize = 15,
+            Alignment = HintAlignment.Center,
+            XCoordinate = 0,
+            YCoordinate = 82,
+            YCoordinateAlign = HintVerticalAlign.Top,
+            SyncSpeed = HintSyncSpeed.Fast
+        };
+        display.AddHint(Hint);
+    }
 
     public override void Update()
     {
-        if (!IsConnected || !Round.IsStarted)
+        if (!IsPlayerConnected || !Round.IsStarted)
         {
-            SetText(string.Empty, HintZone.UpperRight);
+            if (!string.IsNullOrEmpty(_lastText))
+            {
+                SetText(string.Empty);
+                _lastText = string.Empty;
+            }
             return;
         }
 
         var generators = Generator.List.ToList();
-        if (generators.Count == 0)
-        {
-            SetText(string.Empty, HintZone.UpperRight);
-            return;
-        }
+        if (generators.Count == 0) return;
 
         int engaged = generators.Count(g => g.IsEngaged);
         int total = generators.Count;
 
-        // Показываем, если хотя бы один генератор включен или в процессе
-        if (engaged > 0)
+        // Показываем панель генераторов, если хоть 1 генератор задействован или активируется
+        bool isAnyActivating = generators.Any(g => g.IsActivating);
+        if (engaged == 0 && !isAnyActivating)
         {
-            string color = engaged == total ? "#22c55e" : "#38bdf8";
-            string text = $"<color={color}>⚙️ <b>Генераторы: {engaged}/{total}</b></color>";
-            SetText(text, HintZone.UpperRight, fontSize: 17, tag: "hud_generators");
+            if (!string.IsNullOrEmpty(_lastText))
+            {
+                SetText(string.Empty);
+                _lastText = string.Empty;
+            }
+            return;
         }
-        else
+
+        if (!EnsureHint()) return;
+
+        string text = $"<b><color=#00FFFF>⚡ Генераторы SCP-079: {engaged}/{total} задействовано</color></b>";
+
+        if (text != _lastText)
         {
-            SetText(string.Empty, HintZone.UpperRight);
+            SetText(text);
+            _lastText = text;
         }
     }
 }

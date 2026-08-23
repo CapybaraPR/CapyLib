@@ -1,0 +1,38 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Exiled.API.Features;
+using Mirror;
+
+namespace Capy.Engine.DevTools.Extensions;
+
+public class MirrorWriterExtensions {
+    private static readonly Dictionary<Type, Delegate> CachedWriters = [];
+
+    public static bool Write<T>(T value, NetworkWriterPooled networkWriter) {
+        return Write(typeof(T), value, networkWriter);
+    }
+
+    public static bool Write(Type type, object? value, NetworkWriterPooled networkWriter) {
+        if (CachedWriters.TryGetValue(type, out Delegate del)) {
+            del.DynamicInvoke(networkWriter, value);
+            return true;
+        }
+
+        Type genericType = typeof(Writer<>).MakeGenericType(type);
+        FieldInfo? writeField = genericType.GetField("write", BindingFlags.Static | BindingFlags.Public);
+        if (writeField == null) {
+            Log.Warn($"Tried to write type: {type} but has no NetworkWriter!");
+            return false;
+        }
+
+        if (writeField.GetValue(null) is not Delegate newDel) {
+            Log.Warn($"Writer<{type}>.write is not a delegate!");
+            return false;
+        }
+
+        CachedWriters[type] = newDel;
+        newDel.DynamicInvoke(networkWriter, value);
+        return true;
+    }
+}

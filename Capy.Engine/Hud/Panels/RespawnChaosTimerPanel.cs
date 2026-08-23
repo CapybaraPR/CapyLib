@@ -1,17 +1,21 @@
 ﻿using System;
 using Capy.Engine.Hints.Enum;
 using Capy.Engine.Hints.Models;
+using Hint = Capy.Engine.Hints.Models.Hint;
 using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
-using Hint = Capy.Engine.Hints.Models.Hint;
+using Exiled.API.Enums;
+using Respawning.Waves;
+using Respawning.Waves.Generic;
+using UnityEngine;
 
 namespace Capy.Engine.Hud.Panels;
 
-public class WarheadStatusPanel : HudPanel
+public class RespawnChaosTimerPanel : HudPanel
 {
     private string _lastText = string.Empty;
 
-    public WarheadStatusPanel(Player player) : base(player) { }
+    public RespawnChaosTimerPanel(Player player) : base(player) { }
 
     protected override void CreateHint(PlayerDisplay display)
     {
@@ -20,9 +24,9 @@ public class WarheadStatusPanel : HudPanel
             Text = string.Empty,
             FontSize = 18,
             Alignment = HintAlignment.Center,
-            XCoordinate = 0,
-            YCoordinate = 60,
-            YCoordinateAlign = HintVerticalAlign.Top,
+            XCoordinate = 430,
+            YCoordinate = 82,
+            YCoordinateAlign = HintVerticalAlign.Middle,
             SyncSpeed = HintSyncSpeed.Fast
         };
         display.AddHint(Hint);
@@ -30,7 +34,7 @@ public class WarheadStatusPanel : HudPanel
 
     public override void Update()
     {
-        if (!IsPlayerConnected || !Warhead.IsInProgress)
+        if (!IsPlayerConnected || Player.IsAlive || !Round.IsStarted)
         {
             if (!string.IsNullOrEmpty(_lastText))
             {
@@ -42,11 +46,15 @@ public class WarheadStatusPanel : HudPanel
 
         if (!EnsureHint()) return;
 
-        double secondsLeft = Math.Max(0, Math.Ceiling(Warhead.DetonationTimer));
-        TimeSpan ts = TimeSpan.FromSeconds(secondsLeft);
-        string timeStr = $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+        double secP = 0;
+        if (Respawn.TryGetWaveBase(SpawnableFaction.ChaosWave, out var wave) && wave is TimeBasedWave timeBasedWave)
+        {
+            secP = Math.Max(0, timeBasedWave.Timer.TimeLeft);
+        }
 
-        string text = $"<b><color=#FF0000>🚨 АВТОБОЕГОЛОВКА: {timeStr} 🚨</color></b>";
+        string tP = TimeSpan.FromSeconds(Math.Ceiling(secP)).ToString(@"mm\:ss");
+
+        string text = $"<size=18><color=#608F38>До прибытия: {tP}</color></size>";
 
         if (text != _lastText)
         {

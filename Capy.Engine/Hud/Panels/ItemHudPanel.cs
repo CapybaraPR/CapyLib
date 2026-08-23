@@ -1,39 +1,57 @@
 using System.Collections.Generic;
-using System.Linq;
+using Capy.Engine.CustomItems.Base;
+using Capy.Engine.CustomItems.Manager;
+using Capy.Engine.DevTools.Hud;
 using Capy.Engine.Hints.Enum;
 using Capy.Engine.Hints.Models;
 using Capy.Engine.Hints.Utilities;
-using Capy.Engine.Hud.Config;
 using Exiled.API.Features;
-using PlayerRoles;
+using UnityEngine;
 using Hint = Capy.Engine.Hints.Models.Hint;
 
 namespace Capy.Engine.Hud.Panels;
 
-public class SpectatorListPanel : HudPanel
+public class ItemHudPanel : HudPanel
 {
     private string _lastText = string.Empty;
 
-    public SpectatorListPanel(Player player) : base(player) { }
+    public ItemHudPanel(Player player) : base(player) { }
 
     protected override void CreateHint(PlayerDisplay display)
     {
+        Vector2 pos = HudLayout.GetDynamicStatsPosition(Player);
+
         Hint = new Hint
         {
             Text = string.Empty,
-            FontSize = 28,
-            Alignment = HintAlignment.Right,
-            XCoordinate = 0,
-            YCoordinate = 350,
+            FontSize = 22,
+            Alignment = HintAlignment.Left,
+            XCoordinate = pos.x,
+            YCoordinate = pos.y,
             YCoordinateAlign = HintVerticalAlign.Middle,
+            Layer = HintLayer.Notification,
+            Priority = 10,
+            Tag = "custom_item_hud",
             SyncSpeed = HintSyncSpeed.Fast
         };
+
         display.AddHint(Hint);
     }
 
     public override void Update()
     {
-        if (!IsPlayerConnected || !Player.IsAlive)
+        if (!IsPlayerConnected || !Player.IsAlive || Player.CurrentItem == null)
+        {
+            if (!string.IsNullOrEmpty(_lastText))
+            {
+                SetText(string.Empty);
+                _lastText = string.Empty;
+            }
+            return;
+        }
+
+        CustomItem? customItem = CustomItemsManager.Items.FirstOrDefault(i => i.IsTracked(Player.CurrentItem));
+        if (customItem == null)
         {
             if (!string.IsNullOrEmpty(_lastText))
             {
@@ -45,27 +63,12 @@ public class SpectatorListPanel : HudPanel
 
         if (!EnsureHint()) return;
 
-        var config = CapyPlugin.Instance?.Config?.Hud ?? new HudConfig();
-        if (config == null || !config.Enabled) return;
+        Vector2 pos = HudLayout.GetDynamicStatsPosition(Player);
+        Hint!.XCoordinate = pos.x;
+        Hint.YCoordinate = pos.y;
 
-        List<string> names = Player.CurrentSpectatingPlayers?
-            .Where(p => p is not null && p.Role.Type == RoleTypeId.Spectator)
-            .Select(p => p.Nickname)
-            .ToList() ?? new List<string>();
-
-        if (names.Count == 0)
-        {
-            if (!string.IsNullOrEmpty(_lastText))
-            {
-                SetText(string.Empty);
-                _lastText = string.Empty;
-            }
-            return;
-        }
-
-        string header = config.SpectatorListHeader.Replace("{count}", names.Count.ToString());
-        string list = string.Join("\n", names.Select(n => config.SpectatorListNameFormat.Replace("{nickname}", n)));
-        string text = $"{header}\n{list}";
+        string hex = customItem.ColorHex?.TrimStart('#') ?? "FFA500";
+        string text = $"<size=22><color=#{hex}><b>[{customItem.Name}]</b></color></size>";
 
         if (text != _lastText)
         {

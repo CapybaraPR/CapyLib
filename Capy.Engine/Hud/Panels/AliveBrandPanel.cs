@@ -1,27 +1,28 @@
-﻿using System;
-using Capy.Engine.Hints.Enum;
+﻿using Capy.Engine.Hints.Enum;
 using Capy.Engine.Hints.Models;
+using Hint = Capy.Engine.Hints.Models.Hint;
 using Capy.Engine.Hints.Utilities;
 using Exiled.API.Features;
-using Hint = Capy.Engine.Hints.Models.Hint;
+using Capy.Engine.Hud.Config;
 
 namespace Capy.Engine.Hud.Panels;
 
-public class WarheadStatusPanel : HudPanel
+public class AliveBrandPanel : HudPanel
 {
     private string _lastText = string.Empty;
 
-    public WarheadStatusPanel(Player player) : base(player) { }
+    public AliveBrandPanel(Player player) : base(player) { }
 
     protected override void CreateHint(PlayerDisplay display)
     {
+        // Very bottom of screen - Top align with high Y pushes it down
         Hint = new Hint
         {
             Text = string.Empty,
-            FontSize = 18,
+            FontSize = 25,
             Alignment = HintAlignment.Center,
             XCoordinate = 0,
-            YCoordinate = 60,
+            YCoordinate = 1050,
             YCoordinateAlign = HintVerticalAlign.Top,
             SyncSpeed = HintSyncSpeed.Fast
         };
@@ -30,7 +31,7 @@ public class WarheadStatusPanel : HudPanel
 
     public override void Update()
     {
-        if (!IsPlayerConnected || !Warhead.IsInProgress)
+        if (!IsPlayerConnected || !Player.IsAlive)
         {
             if (!string.IsNullOrEmpty(_lastText))
             {
@@ -42,12 +43,10 @@ public class WarheadStatusPanel : HudPanel
 
         if (!EnsureHint()) return;
 
-        double secondsLeft = Math.Max(0, Math.Ceiling(Warhead.DetonationTimer));
-        TimeSpan ts = TimeSpan.FromSeconds(secondsLeft);
-        string timeStr = $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+        var config = CapyPlugin.Instance?.Config?.Hud ?? new Capy.Engine.Hud.Config.HudConfig();
+        if (config == null || !config.Enabled) return;
 
-        string text = $"<b><color=#FF0000>🚨 АВТОБОЕГОЛОВКА: {timeStr} 🚨</color></b>";
-
+        string text = config.ServerBrandHintText;
         if (text != _lastText)
         {
             SetText(text);
