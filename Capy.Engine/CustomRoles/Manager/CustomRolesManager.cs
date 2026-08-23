@@ -71,6 +71,7 @@ public static class CustomRolesManager
     {
         if (ev.Player == null) return;
         var role = GetRole(ev.Player);
-        role?.OnRemoved(ev.Player);
+        if (role == null || role.IsAssigning) return;
+        role.OnRemoved(ev.Player);
     }
 }

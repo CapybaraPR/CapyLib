@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Capy.Core.Database.Models;
 using CommandSystem;
@@ -21,10 +20,17 @@ public sealed class TopCommand : ICommand
             ? arguments.Array[arguments.Offset].ToLowerInvariant()
             : "kills";
 
-        IEnumerable<PlayerDataModel> all = CapyPlugin.Instance?.Database?.GetAllPlayers() ?? Enumerable.Empty<PlayerDataModel>();
-        List<PlayerDataModel> list = all.ToList();
+        string field = mode switch
+        {
+            "time" or "playtime" => nameof(PlayerDataModel.TotalPlaytimeSeconds),
+            "rounds" => nameof(PlayerDataModel.RoundsPlayed),
+            _ => nameof(PlayerDataModel.Kills)
+        };
 
-        if (list.Count == 0)
+        IReadOnlyList<PlayerDataModel> top = CapyPlugin.Instance?.Database?.GetTopPlayers(field, 10)
+                                             ?? Array.Empty<PlayerDataModel>();
+
+        if (top.Count == 0)
         {
             response = "\n<color=#ffa94e>Таблица лидеров пока пуста. Сыграйте раунд, чтобы статистика сохранилась!</color>\n";
             return true;
@@ -39,9 +45,8 @@ public sealed class TopCommand : ICommand
             sb.AppendLine("<b><color=#ffd285>              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
-            var sorted = list.OrderByDescending(p => p.TotalPlaytimeSeconds).Take(10).ToList();
             int rank = 1;
-            foreach (var p in sorted)
+            foreach (var p in top)
             {
                 string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
@@ -54,9 +59,8 @@ public sealed class TopCommand : ICommand
             sb.AppendLine("<b><color=#ffd285>             [ ТОП-10 ИГРОКОВ ПО РАУНДАМ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
-            var sorted = list.OrderByDescending(p => p.RoundsPlayed).Take(10).ToList();
             int rank = 1;
-            foreach (var p in sorted)
+            foreach (var p in top)
             {
                 string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
@@ -69,9 +73,8 @@ public sealed class TopCommand : ICommand
             sb.AppendLine("<b><color=#ffd285>             [ ТОП-10 ИГРОКОВ ПО УБИЙСТВАМ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
-            var sorted = list.OrderByDescending(p => p.Kills).Take(10).ToList();
             int rank = 1;
-            foreach (var p in sorted)
+            foreach (var p in top)
             {
                 string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
                 string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");

@@ -1,20 +1,35 @@
 namespace Capy.Core.Features;
 
-public class PlayerData {
-    private static HashSet<PlayerData> _data = new();
-    
-    public static void Add(string id, string key, List<object> data) => _data.Add(new PlayerData { UserId = id, Data = new Dictionary<string, List<object>> {{ key, data }}});
-        
-    public static bool Contains(string id) => _data.Contains(Get(id)!);
-    public static PlayerData? Get(string id) => _data.FirstOrDefault(x => x.UserId == id);
-        
-    public static bool TryGet(string id, out PlayerData? data) {
-        data = Get(id);
+public class PlayerData
+{
+    private static readonly Dictionary<string, PlayerData> Store = new(StringComparer.OrdinalIgnoreCase);
 
+    public string UserId { get; set; } = string.Empty;
+    public Dictionary<string, List<object>> Data { get; set; } = new();
+
+    public static void Add(string id, string key, List<object> data)
+    {
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(key)) return;
+
+        if (!Store.TryGetValue(id, out var entry))
+        {
+            entry = new PlayerData { UserId = id };
+            Store[id] = entry;
+        }
+
+        entry.Data[key] = data;
+    }
+
+    public static bool Contains(string id) => !string.IsNullOrEmpty(id) && Store.ContainsKey(id);
+
+    public static PlayerData? Get(string id) =>
+        string.IsNullOrEmpty(id) ? null : Store.TryGetValue(id, out var entry) ? entry : null;
+
+    public static bool TryGet(string id, out PlayerData? data)
+    {
+        data = Get(id);
         return data != null;
     }
-    public static void Remove(string id) => _data.Remove(_data.ToList().Find(x => x.UserId == id));
 
-    public string UserId { get; set; } = "";
-    public Dictionary<string, List<object>> Data { get; set; } = new();
+    public static bool Remove(string id) => !string.IsNullOrEmpty(id) && Store.Remove(id);
 }

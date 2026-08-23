@@ -18,19 +18,15 @@ public class ModuleLoader
     {
         _modules.Clear();
 
-        // 1. Поиск внутренних модулей в текущих сборках AppDomain
         LoadInternalModules();
-
-        // 2. Поиск внешних DLL модулей из папки Plugins/CapyLib/Modules
         LoadExternalModules();
 
-        // 3. Топологическая сортировка по графу зависимостей [DependsOn]
-        var sortedModules = SortByDependencies(_modules);
+        var unresolvable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sortedModules = SortByDependencies(_modules, unresolvable);
 
-        // 4. Последовательный запуск модулей
         foreach (var module in sortedModules)
         {
-            if (!module.IsEnabled) continue;
+            if (!module.IsEnabled || unresolvable.Contains(module.Name)) continue;
 
             try
             {
@@ -114,19 +110,36 @@ public class ModuleLoader
         }
     }
 
-    private List<ICapyModule> SortByDependencies(List<ICapyModule> modules)
+    private List<ICapyModule> SortByDependencies(List<ICapyModule> modules, HashSet<string> unresolvable)
     {
         var result = new List<ICapyModule>();
         var visited = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        var moduleMap = modules.ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
+        var moduleMap = new Dictionary<string, ICapyModule>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var module in modules)
+        {
+            if (string.IsNullOrWhiteSpace(module.Name))
+            {
+                Log.Error($"[ModuleLoader] Модуль {module.GetType().FullName} имеет пустое имя и будет пропущен.");
+                continue;
+            }
+
+            if (moduleMap.ContainsKey(module.Name))
+            {
+                Log.Error($"[ModuleLoader] Дубликат имени модуля '{module.Name}' ({module.GetType().FullName}). Дубликат пропущен.");
+                continue;
+            }
+
+            moduleMap[module.Name] = module;
+        }
 
         void Dfs(ICapyModule current)
         {
             if (visited.TryGetValue(current.Name, out var inProgress))
             {
-                if (inProgress)
+                if (inProgress && unresolvable.Add(current.Name))
                 {
-                    Log.Warn($"[ModuleLoader] Обнаружена циклическая зависимость для модуля '{current.Name}'!");
+                    Log.Error($"[ModuleLoader] Циклическая зависимость: модуль '{current.Name}' не будет запущен.");
                 }
                 return;
             }
@@ -143,17 +156,25 @@ public class ModuleLoader
                 {
                     Dfs(depModule);
                 }
-                else
+                else if (unresolvable.Add(current.Name))
                 {
-                    Log.Warn($"[ModuleLoader] Модуль '{current.Name}' требует отсутствующий модуль '{depName}'!");
+                    Log.Error($"[ModuleLoader] Модуль '{current.Name}' требует отсутствующий модуль '{depName}' и не будет запущен.");
+                }
+
+                if (unresolvable.Contains(depName) && !unresolvable.Contains(current.Name))
+                {
+                    unresolvable.Add(current.Name);
+                    Log.Error($"[ModuleLoader] Модуль '{current.Name}' отключён: зависимость '{depName}' неразрешима.");
                 }
             }
 
             visited[current.Name] = false;
-            result.Add(current);
+
+            if (!unresolvable.Contains(current.Name))
+                result.Add(current);
         }
 
-        foreach (var module in modules)
+        foreach (var module in moduleMap.Values)
         {
             if (!visited.ContainsKey(module.Name))
             {

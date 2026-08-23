@@ -62,8 +62,15 @@ public sealed class DiscordBridgeConfig : IModuleConfig
         "serpentshand", "shand", "serpents", "shp"
     };
 
+    [Description("Разрешить запросам самостоятельно запрашивать уровень Creator (обход белого списка команд). По умолчанию выключено: уровень доступа определяется сервером.")]
+    public bool AllowCreatorAccess { get; set; } = false;
+
     [Description("Команды, запрещённые даже уровню Ключ Создателя.")]
-    public List<string> CreatorBlockedCommands { get; set; } = new();
+    public List<string> CreatorBlockedCommands { get; set; } = new()
+    {
+        "setgroup", "setgroupid", "permissions", "perms", "userpermissions",
+        "reloadpermissions", "grantaccess", "giveaccess"
+    };
 
     [Description("Максимальная длина серверной команды.")]
     public int MaxCommandLength { get; set; } = 512;
@@ -107,8 +114,20 @@ public sealed class DiscordBridgeConfig : IModuleConfig
     [Description("Логировать локальные и глобальные репорты.")]
     public bool LogReports { get; set; } = true;
 
-    [Description("Срок действия кода привязки Discord в минутах.")]
+    [Description("Срок действия кода привязки Discord в минутах (максимум 15).")]
     public int LinkCodeLifetimeMinutes { get; set; } = 10;
+
+    [Description("Кулдаун между попытками ввода кода привязки от одного игрока, секунды.")]
+    public int LinkRedeemCooldownSeconds { get; set; } = 10;
+
+    [Description("Сколько неверных попыток допускается для одного кода, прежде чем он инвалидируется.")]
+    public int LinkMaxFailedAttemptsPerCode { get; set; } = 3;
+
+    [Description("Сколько неверных попыток допускается от одного игрока до автоматической блокировки.")]
+    public int LinkMaxFailedAttemptsPerPlayer { get; set; } = 5;
+
+    [Description("Длительность блокировки игрока за перебор кодов привязки, минуты.")]
+    public int LinkLockoutMinutes { get; set; } = 10;
 
     [Description("Интервал проверки Discord-ролей подключённых игроков, секунды.")]
     public float DiscordRoleCheckIntervalSeconds { get; set; } = 5f;

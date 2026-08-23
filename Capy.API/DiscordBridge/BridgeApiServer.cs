@@ -19,6 +19,7 @@ public sealed class BridgeApiServer : IDisposable
 {
     private const int MaximumRequestBodyBytes = 64 * 1024;
     private const int MaximumRoleSyncBodyBytes = 512 * 1024;
+    private static readonly TimeSpan RequestDeadline = TimeSpan.FromSeconds(15);
     private static readonly Regex HiddenServerMetadata = new(
         @"<color\s*=\s*#00000000>.*?</color>|<size\s*=\s*1>.*?</size>",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
@@ -47,6 +48,8 @@ public sealed class BridgeApiServer : IDisposable
     private Task? _acceptLoop;
     private CoroutineHandle _statusRefreshHandle;
     private StatusResponse? _lastStatus;
+    private PlayersResponse? _lastPlayers;
+    private GroupsResponse? _lastGroups;
     private int _stopped;
 
     public BridgeApiServer(
@@ -78,12 +81,19 @@ public sealed class BridgeApiServer : IDisposable
 
         try
         {
-            _listener.Prefixes.Add(NormalizePrefix(_config.ListenPrefix));
+            string normalizedPrefix = NormalizePrefix(_config.ListenPrefix);
+
+            if (!IsLoopbackPrefix(normalizedPrefix))
+            {
+                Log.Warn("[DiscordBridge.ApiServer] ВНИМАНИЕ: API слушает НЕ loopback-адрес! Полный контроль над сервером доступен по сети. Убедитесь, что RequireSshSignature=true и AllowedClientIps заполнен.");
+            }
+
+            _listener.Prefixes.Add(normalizedPrefix);
             _listener.Start();
             _dispatcher.Start();
             _statusRefreshHandle = Timing.RunCoroutine(StatusSnapshotLoop());
             _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
-            Log.Info($"[DiscordBridge.ApiServer] API успешно слушает {NormalizePrefix(_config.ListenPrefix)} (SSH подпись: {(_config.RequireSshSignature ? "включена" : "отключена")})");
+            Log.Info($"[DiscordBridge.ApiServer] API успешно слушает {normalizedPrefix} (SSH подпись: {(_config.RequireSshSignature ? "включена" : "отключена")}, Creator-уровень: {(_config.AllowCreatorAccess ? "разрешён" : "выключен")})");
         }
         catch (Exception ex)
         {
@@ -160,6 +170,7 @@ public sealed class BridgeApiServer : IDisposable
             return;
         }
 
+        CancellationTokenSource? deadline = null;
         try
         {
             IPAddress? clientIpAddress = context.Request.RemoteEndPoint?.Address;
@@ -199,15 +210,24 @@ public sealed class BridgeApiServer : IDisposable
                     ? MaximumRoleSyncBodyBytes
                     : MaximumRequestBodyBytes;
 
-                using var ms = new MemoryStream();
-                await context.Request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-                bodyBytes = ms.ToArray();
-
-                if (bodyBytes.Length > maxBytes)
+                long declaredLength = context.Request.ContentLength64;
+                if (declaredLength > maxBytes)
                 {
                     await RespondJsonAsync(context.Response, (HttpStatusCode)413, new ErrorResponse { Error = "Тело запроса превышает допустимый размер." }).ConfigureAwait(false);
                     return;
                 }
+
+                deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                deadline.CancelAfter(RequestDeadline);
+
+                byte[]? boundedBody = await ReadBodyBoundedAsync(context.Request.InputStream, maxBytes, deadline.Token).ConfigureAwait(false);
+                if (boundedBody == null)
+                {
+                    await RespondJsonAsync(context.Response, (HttpStatusCode)413, new ErrorResponse { Error = "Тело запроса превышает допустимый размер." }).ConfigureAwait(false);
+                    return;
+                }
+
+                bodyBytes = boundedBody;
             }
 
             string? sigHeader = context.Request.Headers["X-Aspect-Signature"];
@@ -220,9 +240,10 @@ public sealed class BridgeApiServer : IDisposable
 
                 string ua = context.Request.UserAgent ?? "None";
                 string keyId = context.Request.Headers["X-Aspect-Key-Id"] ?? "Не указан";
-                string bodyPreview = bodyBytes.Length == 0
-                    ? "Пусто"
-                    : (bodyBytes.Length > 400 ? Encoding.UTF8.GetString(bodyBytes, 0, 400) + "… (обрезано)" : Encoding.UTF8.GetString(bodyBytes));
+                string bodyHash = BridgeAuth.ComputeSha256Hex(bodyBytes);
+                string bodyPreview = _config.DebugMode && bodyBytes.Length > 0
+                    ? Encoding.UTF8.GetString(bodyBytes, 0, Math.Min(200, bodyBytes.Length)) + "… (обрезано)"
+                    : "Скрыто";
 
                 _eventStore.Append(
                     BridgeLogCategory.Security,
@@ -239,7 +260,7 @@ public sealed class BridgeApiServer : IDisposable
                         new BridgeLogField { Name = "Подпись X-Aspect-Signature", Value = string.IsNullOrEmpty(sigHeader) ? "*Отсутствует*" : $"`{sigHeader.Substring(0, Math.Min(32, sigHeader.Length))}...`", Inline = true },
                         new BridgeLogField { Name = "Timestamp", Value = string.IsNullOrEmpty(tsHeader) ? "*Отсутствует*" : $"`{tsHeader}`", Inline = true },
                         new BridgeLogField { Name = "User-Agent", Value = $"`{ua}`", Inline = false },
-                        new BridgeLogField { Name = "Тело запроса (Payload)", Value = $"```json\n{bodyPreview}\n```", Inline = false },
+                        new BridgeLogField { Name = "Тело запроса (Payload)", Value = $"`{bodyHash}`\n```json\n{bodyPreview}\n```", Inline = false },
                         new BridgeLogField { Name = "Причина отклонения", Value = $"❌ {authError}", Inline = false }
                     });
 
@@ -254,7 +275,7 @@ public sealed class BridgeApiServer : IDisposable
             Log.Error($"[DiscordBridge.ApiServer] Необработанная ошибка обработки запроса: {ex}");
             try
             {
-                await RespondJsonAsync(context.Response, HttpStatusCode.InternalServerError, new ErrorResponse { Error = "Внутренняя ошибка сервера: " + ex.Message }).ConfigureAwait(false);
+                await RespondJsonAsync(context.Response, HttpStatusCode.InternalServerError, new ErrorResponse { Error = "Внутренняя ошибка сервера." }).ConfigureAwait(false);
             }
             catch
             {
@@ -262,6 +283,7 @@ public sealed class BridgeApiServer : IDisposable
         }
         finally
         {
+            deadline?.Dispose();
             _requestSlots.Release();
         }
     }
@@ -341,6 +363,26 @@ public sealed class BridgeApiServer : IDisposable
         return JsonSerializer.Deserialize<T>(json, JsonOptions);
     }
 
+    private static async Task<byte[]?> ReadBodyBoundedAsync(Stream stream, int maxBytes, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        using var ms = new MemoryStream(Math.Min(maxBytes, 1024 * 1024));
+
+        while (true)
+        {
+            int read = await stream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false);
+            if (read == 0)
+                break;
+
+            if (ms.Length + read > maxBytes)
+                return null;
+
+            await ms.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
+        }
+
+        return ms.ToArray();
+    }
+
     private async Task HandleAddStaffAsync(HttpListenerResponse response, byte[] bodyBytes)
     {
         StaffAddRequest? req;
@@ -372,6 +414,17 @@ public sealed class BridgeApiServer : IDisposable
                 req.ActorDiscordName,
                 req.Reason);
 
+            try
+            {
+                await _dispatcher
+                    .InvokeAsync(() => _staffService.ApplyToPlayerIfOnline(member.Id, member.Group, member.ServerScope), _config.GameThreadTimeoutSeconds)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception dispatchEx)
+            {
+                Log.Warn($"[DiscordBridge.ApiServer] Не удалось применить группу стаффа к онлайн-игроку: {dispatchEx.Message}");
+            }
+
             await RespondJsonAsync(response, HttpStatusCode.OK, new StaffMemberResponse { Success = true, Member = member }).ConfigureAwait(false);
         }
         catch (ArgumentException aex)
@@ -380,7 +433,8 @@ public sealed class BridgeApiServer : IDisposable
         }
         catch (Exception ex)
         {
-            await RespondJsonAsync(response, HttpStatusCode.InternalServerError, new ErrorResponse { Error = ex.Message }).ConfigureAwait(false);
+            Log.Error($"[DiscordBridge.ApiServer] Ошибка /staff/add: {ex}");
+            await RespondJsonAsync(response, HttpStatusCode.InternalServerError, new ErrorResponse { Error = "Внутренняя ошибка при сохранении администратора." }).ConfigureAwait(false);
         }
     }
 
@@ -411,6 +465,17 @@ public sealed class BridgeApiServer : IDisposable
 
         if (removed)
         {
+            try
+            {
+                await _dispatcher
+                    .InvokeAsync(() => _staffService.StripPlayerIfOnline(req.UserId), _config.GameThreadTimeoutSeconds)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception dispatchEx)
+            {
+                Log.Warn($"[DiscordBridge.ApiServer] Не удалось снять группу с онлайн-игрока: {dispatchEx.Message}");
+            }
+
             await RespondJsonAsync(response, HttpStatusCode.OK, new { success = true, message = "Администратор успешно снят." }).ConfigureAwait(false);
         }
         else
@@ -451,12 +516,13 @@ public sealed class BridgeApiServer : IDisposable
             try
             {
                 status = await _dispatcher.InvokeAsync(BuildStatusSnapshot, 2).ConfigureAwait(false);
+                _lastStatus = status;
             }
             catch
             {
-                status = BuildStatusSnapshot();
+                await RespondJsonAsync(response, HttpStatusCode.ServiceUnavailable, new ErrorResponse { Error = "Игровой поток временно недоступен." }).ConfigureAwait(false);
+                return;
             }
-            _lastStatus = status;
         }
 
         await RespondJsonAsync(response, HttpStatusCode.OK, status).ConfigureAwait(false);
@@ -464,29 +530,45 @@ public sealed class BridgeApiServer : IDisposable
 
     private async Task HandlePlayersAsync(HttpListenerResponse response)
     {
-        PlayersResponse players;
+        PlayersResponse? players;
         try
         {
             players = await _dispatcher.InvokeAsync(BuildPlayersSnapshot, 2).ConfigureAwait(false);
+            _lastPlayers = players;
         }
         catch
         {
-            players = BuildPlayersSnapshot();
+            players = _lastPlayers;
+
+            if (players == null)
+            {
+                await RespondJsonAsync(response, HttpStatusCode.ServiceUnavailable, new ErrorResponse { Error = "Игровой поток временно недоступен." }).ConfigureAwait(false);
+                return;
+            }
         }
+
         await RespondJsonAsync(response, HttpStatusCode.OK, players).ConfigureAwait(false);
     }
 
     private async Task HandleGroupsAsync(HttpListenerResponse response)
     {
-        GroupsResponse groups;
+        GroupsResponse? groups;
         try
         {
             groups = await _dispatcher.InvokeAsync(BuildGroupsSnapshot, 2).ConfigureAwait(false);
+            _lastGroups = groups;
         }
         catch
         {
-            groups = BuildGroupsSnapshot();
+            groups = _lastGroups;
+
+            if (groups == null)
+            {
+                await RespondJsonAsync(response, HttpStatusCode.ServiceUnavailable, new ErrorResponse { Error = "Игровой поток временно недоступен." }).ConfigureAwait(false);
+                return;
+            }
         }
+
         await RespondJsonAsync(response, HttpStatusCode.OK, groups).ConfigureAwait(false);
     }
 
@@ -522,13 +604,13 @@ public sealed class BridgeApiServer : IDisposable
             return;
         }
 
-        string access = (req.Access ?? "ra").Trim().ToLowerInvariant();
+        string requestedAccess = (req.Access ?? "ra").Trim().ToLowerInvariant();
+        string access = requestedAccess == "creator" && _config.AllowCreatorAccess ? "creator" : "ra";
         string actorName = string.IsNullOrWhiteSpace(req.ActorName) ? "DiscordUser" : req.ActorName.Trim();
         ulong actorId = req.ActorId;
 
         string normalizedName = rawCmd.TrimStart('/', '.').Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
 
-        // Check Creator Blocked
         if ((_config.CreatorBlockedCommands ?? new List<string>()).Any(c => c.Equals(normalizedName, StringComparison.OrdinalIgnoreCase)))
         {
             _eventLogger.LogDiscordDeniedCommand(rawCmd, "Команда заблокирована для Discord в CreatorBlockedCommands.", $"{actorName} ({actorId})", access);
@@ -536,7 +618,6 @@ public sealed class BridgeApiServer : IDisposable
             return;
         }
 
-        // Check RA Allowed if not creator
         if (access != "creator")
         {
             bool isAllowed = (_config.RaAllowedCommands ?? new List<string>()).Any(c => c.Equals(normalizedName, StringComparison.OrdinalIgnoreCase));
@@ -855,7 +936,7 @@ public sealed class BridgeApiServer : IDisposable
                 Id = p.Id,
                 Nickname = p.Nickname ?? "Unknown",
                 Name = p.Nickname ?? "Unknown",
-                UserId = p.UserId,
+                UserId = _config.IncludePlayerUserIds ? p.UserId : null,
                 Role = p.Role.Type.ToString(),
                 Team = p.Role.Team.ToString(),
                 IsAlive = p.IsAlive,
@@ -957,6 +1038,33 @@ public sealed class BridgeApiServer : IDisposable
         string p = (prefix ?? string.Empty).Trim();
         if (!p.EndsWith("/")) p += "/";
         return p;
+    }
+
+    private static bool IsLoopbackPrefix(string prefix)
+    {
+        try
+        {
+            int schemeEnd = prefix.IndexOf("://", StringComparison.Ordinal);
+            if (schemeEnd < 0) return false;
+
+            string hostPart = prefix.Substring(schemeEnd + 3).TrimEnd('/');
+            int portSeparator = hostPart.LastIndexOf(':');
+            if (portSeparator >= 0) hostPart = hostPart.Substring(0, portSeparator);
+
+            hostPart = hostPart.Replace("+", "0.0.0.0").Replace("*", "0.0.0.0");
+
+            if (!IPAddress.TryParse(hostPart, out IPAddress? address) || address == null)
+                return false;
+
+            if (address.IsIPv4MappedToIPv6)
+                address = address.MapToIPv4();
+
+            return IPAddress.IsLoopback(address);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static async Task RespondJsonAsync<T>(HttpListenerResponse response, HttpStatusCode status, T data)

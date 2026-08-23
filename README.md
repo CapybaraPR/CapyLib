@@ -91,7 +91,7 @@ string roleName = RoleTypeId.ClassD.Translate(); // "Класс D"
   * **`CustomRole` / `CustomRolesManager`**: Кастомные роли (Длань Змеи) с выдачей инвентаря, щита и кастомных моделей.
 * **3D-аудио и HUD**:
   * **`AudioRegistry`**: Воспроизведение `.ogg` звуков с пространственной привязкой к игрокам, комнатам или схемам (`ProjectMER`).
-  * **`PlayerDisplay`**: Оптимизированный рендер подсказок 20 FPS.
+  * **`PlayerDisplay`**: Оптимизированный рендер подсказок (render-on-demand, батчинг слоёв).
 
 ---
 

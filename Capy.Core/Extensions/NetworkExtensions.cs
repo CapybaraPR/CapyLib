@@ -19,42 +19,49 @@ using UnityEngine;
 namespace Capy.Core.Extensions;
 
 public static class NetworkExtensions {
-    private static Dictionary<string, string> _rpcFullNames = new();
-    private static Dictionary<Type, MethodInfo> _writerExtensions = new();
-    private static ReadOnlyDictionary<string, string> _readOnlyRpcFullNames = new(_rpcFullNames);
-    private static ReadOnlyDictionary<Type, MethodInfo> _readOnlyWriterExtensions = new(_writerExtensions);
+    private static readonly Lazy<ReadOnlyDictionary<string, string>> RpcFullNameCache =
+        new(BuildRpcFullNameMap, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private static readonly Lazy<ReadOnlyDictionary<Type, MethodInfo>> WriterExtensionCache =
+        new(BuildWriterExtensionMap, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    public static ReadOnlyDictionary<string, string> RpcFullNames => RpcFullNameCache.Value;
+
+    public static ReadOnlyDictionary<Type, MethodInfo> WriterExtensions => WriterExtensionCache.Value;
 
     private static int GetComponentIndex(NetworkIdentity identity, Type type) =>
         Array.FindIndex(identity.NetworkBehaviours, x => x.GetType() == type);
 
-    public static ReadOnlyDictionary<string, string> RpcFullNames {
-        get {
-            if (_rpcFullNames.Count != 0)
-                return _readOnlyRpcFullNames;
+    private static ReadOnlyDictionary<string, string> BuildRpcFullNameMap() {
+        var map = new Dictionary<string, string>();
 
-            Assembly assembly = typeof(ServerConsole).Assembly;
-            IEnumerable<MethodInfo> methods = assembly.GetTypes()
-                .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
-                .Where(m => m.GetCustomAttributes(typeof(ClientRpcAttribute), false).Length > 0 ||
-                            m.GetCustomAttributes(typeof(TargetRpcAttribute), false).Length > 0);
+        Assembly assembly = typeof(ServerConsole).Assembly;
+        IEnumerable<MethodInfo> methods = assembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            .Where(m => m.GetCustomAttributes(typeof(ClientRpcAttribute), false).Length > 0 ||
+                        m.GetCustomAttributes(typeof(TargetRpcAttribute), false).Length > 0);
 
-            foreach (MethodInfo method in methods) {
-                if (method.GetMethodBody() is not { } body)
-                    continue;
+        foreach (MethodInfo method in methods) {
+            if (method.GetMethodBody() is not { } body || method.DeclaringType is null)
+                continue;
 
+            try {
                 byte[] ilCode = body.GetILAsByteArray();
                 int index = Array.IndexOf(ilCode, (byte)OpCodes.Ldstr.Value);
-                if (index < 0 || method.ReflectedType is null)
+                if (index < 0 || index + 5 > ilCode.Length)
                     continue;
 
                 int token = BitConverter.ToInt32(ilCode, index + 1);
-                string fullName = $"{method.ReflectedType.Name}.{method.Name}";
-                if (!_rpcFullNames.ContainsKey(fullName))
-                    _rpcFullNames.Add(fullName, method.Module.ResolveString(token));
+                string fullName = $"{method.DeclaringType.Name}.{method.Name}";
+                if (!map.ContainsKey(fullName))
+                    map.Add(fullName, method.Module.ResolveString(token));
             }
-
-            return _readOnlyRpcFullNames;
+            catch {
+                continue;
+            }
         }
+
+        return new ReadOnlyDictionary<string, string>(map);
     }
 
     public static bool HasGeneratorPermission(this Player player, Generator generator, DoorPermissionCheck checkFlags = DoorPermissionCheck.Default)
@@ -102,54 +109,56 @@ public static class NetworkExtensions {
         }
     }
     
-    public static ReadOnlyDictionary<Type, MethodInfo> WriterExtensions {
-        get {
-            if (_writerExtensions.Count != 0)
-                return _readOnlyWriterExtensions;
+    public static ReadOnlyDictionary<Type, MethodInfo> BuildWriterExtensionMap() {
+        var map = new Dictionary<Type, MethodInfo>();
 
-            IEnumerable<MethodInfo> writerMethods = typeof(NetworkWriterExtensions).GetMethods()
-                .Where(m => !m.IsGenericMethod &&
-                            m.GetCustomAttribute(typeof(ObsoleteAttribute)) == null &&
-                            m.GetParameters().Length == 2);
+        IEnumerable<MethodInfo> writerMethods = typeof(NetworkWriterExtensions).GetMethods()
+            .Where(m => !m.IsGenericMethod &&
+                        m.GetCustomAttribute(typeof(ObsoleteAttribute)) == null &&
+                        m.GetParameters().Length == 2);
 
-            foreach (MethodInfo method in writerMethods) {
-                ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
-                if (!_writerExtensions.ContainsKey(param.ParameterType))
-                    _writerExtensions.Add(param.ParameterType, method);
-            }
-
-            Type? generatedType = Assembly.GetAssembly(typeof(RoleTypeId))
-                .GetType("Mirror.GeneratedNetworkCode");
-
-            if (generatedType != null) {
-                IEnumerable<MethodInfo> genMethods = generatedType.GetMethods()
-                    .Where(m => !m.IsGenericMethod &&
-                                m.GetParameters().Length == 2 &&
-                                m.ReturnType == typeof(void));
-
-                foreach (MethodInfo method in genMethods) {
-                    ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
-                    if (!_writerExtensions.ContainsKey(param.ParameterType))
-                        _writerExtensions.Add(param.ParameterType, method);
-                }
-            }
-
-            IEnumerable<Type> serializerTypes = typeof(ServerConsole).Assembly.GetTypes()
-                .Where(t => t.Name.EndsWith("Serializer"));
-
-            foreach (Type serializer in serializerTypes) {
-                IEnumerable<MethodInfo> writeMethods = serializer.GetMethods()
-                    .Where(m => m.ReturnType == typeof(void) && m.Name.StartsWith("Write"));
-
-                foreach (MethodInfo method in writeMethods) {
-                    ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
-                    if (!_writerExtensions.ContainsKey(param.ParameterType))
-                        _writerExtensions.Add(param.ParameterType, method);
-                }
-            }
-
-            return _readOnlyWriterExtensions;
+        foreach (MethodInfo method in writerMethods) {
+            ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
+            if (!map.ContainsKey(param.ParameterType))
+                map.Add(param.ParameterType, method);
         }
+
+        Type? generatedType = Assembly.GetAssembly(typeof(RoleTypeId))
+            ?.GetType("Mirror.GeneratedNetworkCode");
+
+        if (generatedType != null) {
+            IEnumerable<MethodInfo> genMethods = generatedType.GetMethods()
+                .Where(m => !m.IsGenericMethod &&
+                            m.GetParameters().Length == 2 &&
+                            m.ReturnType == typeof(void));
+
+            foreach (MethodInfo method in genMethods) {
+                ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
+                if (!map.ContainsKey(param.ParameterType))
+                    map.Add(param.ParameterType, method);
+            }
+        }
+
+        IEnumerable<Type> serializerTypes = typeof(ServerConsole).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("Serializer"));
+
+        foreach (Type serializer in serializerTypes) {
+            IEnumerable<MethodInfo> writeMethods = serializer.GetMethods()
+                .Where(m => m.ReturnType == typeof(void) && m.Name.StartsWith("Write"));
+
+            foreach (MethodInfo method in writeMethods) {
+                try {
+                    ParameterInfo param = method.GetParameters().First(p => p.ParameterType != typeof(NetworkWriter));
+                    if (!map.ContainsKey(param.ParameterType))
+                        map.Add(param.ParameterType, method);
+                }
+                catch (InvalidOperationException) {
+                    continue;
+                }
+            }
+        }
+
+        return new ReadOnlyDictionary<Type, MethodInfo>(map);
     }
 
     public static void PlayBeepSound(this Player player) =>
@@ -228,21 +237,44 @@ public static class NetworkExtensions {
     public static void SendFakeTargetRpc(Player target, NetworkIdentity behaviorOwner, Type targetType, string rpcName, params object[] values) {
         NetworkWriterPooled writer = NetworkWriterPool.Get();
 
-        foreach (object value in values) {
-            Type valueType = value.GetType();
-            if (_writerExtensions.TryGetValue(valueType, out MethodInfo method)) {
+        try {
+            foreach (object value in values) {
+                if (value == null) {
+                    Log.Warn($"[NetworkExtensions] SendFakeTargetRpc {targetType.Name}.{rpcName}: получен null-аргумент, вызов отменён.");
+                    return;
+                }
+
+                Type valueType = value.GetType();
+                if (!WriterExtensions.TryGetValue(valueType, out MethodInfo? method)) {
+                    Log.Warn($"[NetworkExtensions] SendFakeTargetRpc {targetType.Name}.{rpcName}: нет writer для типа {valueType.Name}, вызов отменён.");
+                    return;
+                }
+
                 method.Invoke(null, [writer, value]);
             }
+
+            int componentIndex = GetComponentIndex(behaviorOwner, targetType);
+            if (componentIndex < 0) {
+                Log.Warn($"[NetworkExtensions] SendFakeTargetRpc: компонент {targetType.Name} не найден на объекте {behaviorOwner.netId}, вызов отменён.");
+                return;
+            }
+
+            if (!RpcFullNames.TryGetValue($"{targetType.Name}.{rpcName}", out string? fullName)) {
+                Log.Warn($"[NetworkExtensions] SendFakeTargetRpc: RPC '{targetType.Name}.{rpcName}' не найден, вызов отменён.");
+                return;
+            }
+
+            RpcMessage msg = new() {
+                netId = behaviorOwner.netId,
+                componentIndex = (byte)componentIndex,
+                functionHash = (ushort)fullName.GetStableHashCode(),
+                payload = writer.ToArraySegment(),
+            };
+
+            target.Connection.Send(msg);
         }
-
-        RpcMessage msg = new() {
-            netId = behaviorOwner.netId,
-            componentIndex = (byte)GetComponentIndex(behaviorOwner, targetType),
-            functionHash = (ushort)RpcFullNames[$"{targetType.Name}.{rpcName}"].GetStableHashCode(),
-            payload = writer.ToArraySegment(),
-        };
-
-        target.Connection.Send(msg);
-        NetworkWriterPool.Return(writer);
+        finally {
+            NetworkWriterPool.Return(writer);
+        }
     }
 }

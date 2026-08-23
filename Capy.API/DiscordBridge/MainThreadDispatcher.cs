@@ -9,6 +9,9 @@ namespace Capy.API.DiscordBridge;
 
 internal sealed class MainThreadDispatcher
 {
+    private const int MaxQueueLength = 10240;
+    private const int MaxActionsPerFrame = 32;
+
     private readonly ConcurrentQueue<Action> _workQueue = new();
     private CoroutineHandle _coroutine;
     private int _running;
@@ -27,32 +30,38 @@ internal sealed class MainThreadDispatcher
         {
             if (_coroutine.IsRunning)
                 Timing.KillCoroutines(_coroutine);
-
-            while (_workQueue.TryDequeue(out _)) { }
         }
     }
 
     public Task<T> InvokeAsync<T>(Func<T> function, int timeoutSeconds = 8)
     {
-        var tcs = new TaskCompletionSource<T>();
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        cts.Token.Register(() => tcs.TrySetException(new TimeoutException("Таймаут выполнения задачи на главном потоке сервера.")));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+        using CancellationTokenRegistration registration = cts.Token.Register(
+            () => tcs.TrySetException(new TimeoutException("Таймаут выполнения задачи на главном потоке сервера.")));
 
-        _workQueue.Enqueue(() =>
+        if (_running != 0 && _workQueue.Count < MaxQueueLength)
         {
-            if (tcs.Task.IsCompleted) return;
+            _workQueue.Enqueue(() =>
+            {
+                if (tcs.Task.IsCompleted) return;
 
-            try
-            {
-                T result = function();
-                tcs.TrySetResult(result);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(ex);
-            }
-        });
+                try
+                {
+                    T result = function();
+                    tcs.TrySetResult(result);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+        }
+        else
+        {
+            tcs.TrySetException(new InvalidOperationException("Очередь моста недоступна или переполнена."));
+        }
 
         return tcs.Task;
     }
@@ -68,10 +77,10 @@ internal sealed class MainThreadDispatcher
 
     private IEnumerator<float> DispatchLoop()
     {
-        while (_running == 1)
+        while (_running == 1 || !_workQueue.IsEmpty)
         {
             int processed = 0;
-            while (_workQueue.TryDequeue(out var action) && processed < 32)
+            while (_workQueue.TryDequeue(out var action) && processed < MaxActionsPerFrame)
             {
                 try
                 {

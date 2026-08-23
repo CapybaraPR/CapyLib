@@ -268,8 +268,6 @@ public sealed class StaffService : IDisposable
                 Log.Info($"[StaffService] Обновлён администратор: {userId} (было: {oldGroup} -> стало: {group}, scope: {normalizedScope})");
             }
 
-            // Immediately apply to online player if present
-            ApplyToPlayerIfOnline(userId, group, normalizedScope);
             return existing;
         }
     }
@@ -304,8 +302,6 @@ public sealed class StaffService : IDisposable
             _collection.Update(existing);
             Log.Info($"[StaffService] Снят администратор: {userId} (был {oldGroup}) актором {actorDiscordName} ({actorDiscordId})");
 
-            // Strip in-game group if player online
-            StripPlayerIfOnline(userId);
             return true;
         }
     }
@@ -425,46 +421,47 @@ public sealed class StaffService : IDisposable
         return false;
     }
 
-    private void ApplyToPlayerIfOnline(string userId, string group, string scope)
+    public void ApplyToPlayerIfOnline(string rawUserId, string group, string scope)
     {
         if (!IsScopeApplicable(scope)) return;
-        Player? player = Player.List.FirstOrDefault(p => NormalizeUserId(p.UserId) == userId);
-        if (player != null && player.IsConnected && !player.IsHost)
-        {
-            UserGroup? targetGroup = ServerStatic.PermissionsHandler.GetGroup(group.Trim());
-            if (targetGroup != null)
-            {
-                player.Group = targetGroup;
-                Log.Info($"[StaffService] Онлайн-игроку {player.Nickname} ({userId}) мгновенно назначена группа '{group}'.");
-            }
 
-            try
-            {
-                StaffMemberModel? staff = _collection?.FindById(userId);
-                if (staff != null)
-                {
-                    if (!string.IsNullOrWhiteSpace(player.Nickname))
-                        staff.Nickname = player.Nickname;
-                    staff.LastSeenUtc = DateTime.UtcNow;
-                    _collection?.Update(staff);
-                }
-                _sessionStartTimes.TryAdd(userId, DateTime.UtcNow);
-                if (!string.IsNullOrWhiteSpace(player.Nickname))
-                    _onlineNicknames[userId] = player.Nickname;
-            }
-            catch { }
+        string userId = NormalizeUserId(rawUserId);
+        Player? player = Player.List.FirstOrDefault(p => NormalizeUserId(p.UserId) == userId);
+        if (player == null || !player.IsConnected || player.IsHost) return;
+
+        UserGroup? targetGroup = ServerStatic.PermissionsHandler.GetGroup(group.Trim());
+        if (targetGroup != null)
+        {
+            player.Group = targetGroup;
+            Log.Info($"[StaffService] Онлайн-игроку {player.Nickname} ({userId}) мгновенно назначена группа '{group}'.");
         }
+
+        try
+        {
+            StaffMemberModel? staff = _collection?.FindById(userId);
+            if (staff != null)
+            {
+                if (!string.IsNullOrWhiteSpace(player.Nickname))
+                    staff.Nickname = player.Nickname;
+                staff.LastSeenUtc = DateTime.UtcNow;
+                _collection?.Update(staff);
+            }
+            _sessionStartTimes.TryAdd(userId, DateTime.UtcNow);
+            if (!string.IsNullOrWhiteSpace(player.Nickname))
+                _onlineNicknames[userId] = player.Nickname;
+        }
+        catch { }
     }
 
-    private void StripPlayerIfOnline(string userId)
+    public void StripPlayerIfOnline(string rawUserId)
     {
+        string userId = NormalizeUserId(rawUserId);
         Player? player = Player.List.FirstOrDefault(p => NormalizeUserId(p.UserId) == userId);
-        if (player != null && player.IsConnected && !player.IsHost)
-        {
-            player.Group = null!;
-            player.RankName = null;
-            player.RankColor = null;
-            Log.Info($"[StaffService] Онлайн-игрок {player.Nickname} ({userId}) мгновенно лишён группы.");
-        }
+        if (player == null || !player.IsConnected || player.IsHost) return;
+
+        player.Group = null!;
+        player.RankName = null;
+        player.RankColor = null;
+        Log.Info($"[StaffService] Онлайн-игрок {player.Nickname} ({userId}) мгновенно лишён группы.");
     }
 }

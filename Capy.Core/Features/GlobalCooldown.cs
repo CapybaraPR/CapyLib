@@ -1,52 +1,100 @@
 namespace Capy.Core.Features;
 
-public class GlobalCooldown : IDisposable {
+public class GlobalCooldown : IDisposable
+{
     public static HashSet<GlobalCooldown> Cooldowns { get; } = new();
-    
+
     public object Owner { get; private set; }
     public TimeSpan CooldownTime { get; private set; }
 
     private DateTime _lastUse = DateTime.UtcNow;
 
-    public GlobalCooldown(object owner, TimeSpan cooldownTime) {
-        this.Owner = owner;
-        this.CooldownTime = cooldownTime;
+    public GlobalCooldown(object owner, TimeSpan cooldownTime)
+    {
+        Owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        CooldownTime = cooldownTime;
+
+        lock (Cooldowns)
+        {
+            Cooldowns.Add(this);
+        }
     }
 
-    public void Use(bool overrideCooldown = false) {
-        if (overrideCooldown) {
-            this._lastUse = DateTime.UtcNow;
+    public void Use(bool overrideCooldown = false)
+    {
+        if (overrideCooldown)
+        {
+            _lastUse = DateTime.UtcNow;
             return;
         }
 
-        if (!this.Check())
+        if (!Check())
             return;
 
-        this._lastUse = DateTime.UtcNow;
+        _lastUse = DateTime.UtcNow;
     }
 
-    public double GetRemaining() => (DateTime.UtcNow - (this._lastUse + this.CooldownTime)).TotalSeconds;
-    
-    public bool Check() => DateTime.UtcNow > this._lastUse + this.CooldownTime;
+    public double GetRemaining() => (DateTime.UtcNow - (_lastUse + CooldownTime)).TotalSeconds;
 
-    public static GlobalCooldown? Get(object owner) => Cooldowns.FirstOrDefault(x => x.Owner == owner);
+    public bool Check() => DateTime.UtcNow > _lastUse + CooldownTime;
 
-    public static HashSet<GlobalCooldown>? Get(TimeSpan cooldown) =>
-        Cooldowns.Count(x => x.CooldownTime == cooldown) >= 1
-            ? Cooldowns.Where(x => x.CooldownTime == cooldown).ToHashSet()
-            : null;
-    
-    public static bool TryGet(object owner, out GlobalCooldown? cooldown) {
+    public static GlobalCooldown? Get(object owner)
+    {
+        lock (Cooldowns)
+        {
+            return Cooldowns.FirstOrDefault(x => Equals(x.Owner, owner));
+        }
+    }
+
+    public static GlobalCooldown GetOrAdd(object owner, TimeSpan cooldownTime)
+    {
+        lock (Cooldowns)
+        {
+            return Cooldowns.FirstOrDefault(x => Equals(x.Owner, owner)) ?? new GlobalCooldown(owner, cooldownTime);
+        }
+    }
+
+    public static bool TryGet(object owner, out GlobalCooldown? cooldown)
+    {
         cooldown = Get(owner);
         return cooldown != null;
     }
 
-    public static bool TryGet(TimeSpan cooldown, out HashSet<GlobalCooldown>? cooldowns) {
+    public static HashSet<GlobalCooldown>? Get(TimeSpan cooldown)
+    {
+        lock (Cooldowns)
+        {
+            var matches = Cooldowns.Where(x => x.CooldownTime == cooldown).ToHashSet();
+            return matches.Count > 0 ? matches : null;
+        }
+    }
+
+    public static bool TryGet(TimeSpan cooldown, out HashSet<GlobalCooldown>? cooldowns)
+    {
         cooldowns = Get(cooldown);
         return cooldowns != null;
     }
 
-    public void Dispose() {
-        Cooldowns.Remove(this);
+    internal static int RemoveAllOwnedBy(object owner)
+    {
+        lock (Cooldowns)
+        {
+            var victims = Cooldowns
+                .Where(x => ReferenceEquals(x.Owner, owner) || (x.Owner as string) == (owner as string))
+                .ToList();
+
+            foreach (var victim in victims)
+                Cooldowns.Remove(victim);
+
+            return victims.Count;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (Cooldowns)
+        {
+            Cooldowns.Remove(this);
+        }
     }
 }

@@ -37,15 +37,6 @@ observerPlayer.SendFakeSyncVar(targetPlayer.NetworkIdentity, targetRoleSync, wri
 {
     writer.WriteRoleType(RoleTypeId.Scientist);
 });
-
-// 2. Создание фейкового AdminToy примитива (виден только одному игроку)
-player.SendFakePrimitive(
-    primitiveType: PrimitiveType.Cube,
-    position: player.Position + Vector3.forward * 2f,
-    rotation: Quaternion.identity,
-    scale: new Vector3(0.5f, 2f, 0.5f),
-    color: Color.red
-);
 ```
 
 ---
@@ -135,7 +126,7 @@ AudioToggle.CreateGlobal("round_end_theme", volume: 0.8f);
 AudioToggle.CreateForPlayer(player, "siren", min: 2f, max: 20f, volume: 1f);
 
 // Остановка воспроизведения
-AudioToggle.StopGlobal();
+AudioToggle.DestroyGlobal();
 ```
 
 ---

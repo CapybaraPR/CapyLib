@@ -3,9 +3,6 @@ using System.Text;
 
 namespace Capy.Engine.Hints.Service;
 
-/// <summary>
-/// Менеджер экранного интерфейса игрока с батчингом отрисовки.
-/// </summary>
 public class PlayerDisplay
 {
     private static readonly ConcurrentDictionary<int, PlayerDisplay> Displays = new();
@@ -26,7 +23,13 @@ public class PlayerDisplay
 
     public static void Remove(Player player)
     {
-        Displays.TryRemove(player.Id, out _);
+        Remove(player.Id);
+    }
+
+    public static void Remove(int playerId)
+    {
+        if (Displays.TryRemove(playerId, out var display))
+            display.ClearHint();
     }
 
     public void AddHint(AbstractHint hint)
@@ -42,8 +45,8 @@ public class PlayerDisplay
     {
         lock (_lock)
         {
-            _hints.Remove(hint);
-            Render();
+            if (_hints.Remove(hint))
+                Render();
         }
     }
 
@@ -52,7 +55,6 @@ public class PlayerDisplay
         lock (_lock)
         {
             _hints.Clear();
-            Player.ShowHint(string.Empty, 0.1f);
         }
     }
 
@@ -75,6 +77,10 @@ public class PlayerDisplay
         if (!string.IsNullOrEmpty(finalContent))
         {
             Player.ShowHint(finalContent, 2f);
+        }
+        else
+        {
+            Player.ShowHint(string.Empty, 0.1f);
         }
     }
 }

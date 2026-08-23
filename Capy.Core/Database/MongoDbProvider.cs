@@ -3,13 +3,13 @@ using MongoDB.Driver;
 
 namespace Capy.Core.Database;
 
-/// <summary>
-/// Провайдер базы данных на базе MongoDB для распределённых серверов.
-/// </summary>
 public class MongoDbProvider : IDatabaseProvider
 {
+    private const int MaxTopLimit = 100;
+
     private readonly string _connectionString;
     private readonly string _databaseName;
+    private MongoClient? _client;
     private IMongoDatabase? _database;
     private IMongoCollection<PlayerDataModel>? _players;
 
@@ -19,14 +19,16 @@ public class MongoDbProvider : IDatabaseProvider
         _databaseName = databaseName;
     }
 
+    public bool IsInitialized => _players != null;
+
     public void Initialize()
     {
         try
         {
-            var client = new MongoClient(_connectionString);
-            _database = client.GetDatabase(_databaseName);
+            _client = new MongoClient(_connectionString);
+            _database = _client.GetDatabase(_databaseName);
             _players = _database.GetCollection<PlayerDataModel>("players");
-            Log.Info($"[MongoDbProvider] Подключение к MongoDB '{_databaseName}' успешно установлено.");
+            Log.Info($"[MongoDbProvider] Коллекция '{_databaseName}.players' инициализирована (подключение устанавливается лениво драйвером).");
         }
         catch (Exception ex)
         {
@@ -36,8 +38,16 @@ public class MongoDbProvider : IDatabaseProvider
 
     public void Shutdown()
     {
-        _database = null;
         _players = null;
+        _database = null;
+
+        try
+        {
+            (_client?.Cluster as IDisposable)?.Dispose();
+        }
+        catch { }
+
+        _client = null;
     }
 
     public PlayerDataModel? GetPlayer(string userId)
@@ -78,6 +88,27 @@ public class MongoDbProvider : IDatabaseProvider
         {
             Log.Error($"[MongoDbProvider] Ошибка получения всех игроков: {ex.Message}");
             return Enumerable.Empty<PlayerDataModel>();
+        }
+    }
+
+    public IReadOnlyList<PlayerDataModel> GetTopPlayers(string fieldName, int limit)
+    {
+        if (limit <= 0 || string.IsNullOrWhiteSpace(fieldName) || _players == null)
+            return Array.Empty<PlayerDataModel>();
+
+        try
+        {
+            var sort = new SortDefinitionBuilder<PlayerDataModel>().Descending(fieldName);
+            return _players
+                .Find(Builders<PlayerDataModel>.Filter.Empty)
+                .Sort(sort)
+                .Limit(Math.Min(limit, MaxTopLimit))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[MongoDbProvider] Ошибка выборки топа по '{fieldName}': {ex.Message}");
+            return Array.Empty<PlayerDataModel>();
         }
     }
 

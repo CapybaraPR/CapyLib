@@ -26,11 +26,20 @@ public sealed class StatsCommand : ICommand
             return false;
         }
 
+        bool isStaffViewer = player.RemoteAdminAccess ||
+                             (DiscordBridgeModule.StaffService?.GetStaff(player.UserId)?.IsActive ?? false);
+
         string targetUserId = player.UserId;
         string targetNickname = player.Nickname;
 
         if (arguments.Count > 0 && arguments.Array != null)
         {
+            if (!isStaffViewer)
+            {
+                response = "Просмотр статистики других игроков доступен только администрации.";
+                return false;
+            }
+
             string query = arguments.Array[arguments.Offset].Trim();
             Player? found = Player.List.FirstOrDefault(p =>
                 p.Nickname.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -79,7 +88,7 @@ public sealed class StatsCommand : ICommand
         sb.AppendLine($"<color=#58b9ff>* Побед:</color> <color=#a3e635>{wins}</color>");
         sb.AppendLine($"<color=#58b9ff>* Первый вход:</color> <color=#c2c2c2>{firstJoin:dd.MM.yyyy}</color>");
 
-        if (staff != null && staff.IsActive)
+        if (staff != null && staff.IsActive && isStaffViewer)
         {
             int totalPunishments = staff.BansCount + staff.MutesCount + staff.KicksCount;
             sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");

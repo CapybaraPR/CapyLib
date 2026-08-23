@@ -1,13 +1,11 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Capy.Core.Services;
 
-/// <summary>
-/// Движок форматирования текста с заменой плейсхолдеров (%placeholder%).
-/// </summary>
 public static class PlaceholderReplacer
 {
-    private static readonly Dictionary<string, Func<Player?, string>> Resolvers = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Func<Player?, string>> Resolvers = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Regex PlaceholderRegex = new(@"%([a-zA-Z0-9_]+)%", RegexOptions.Compiled);
 
     public static void RegisterPlaceholder(string key, Func<Player?, string> resolver)

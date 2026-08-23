@@ -28,8 +28,22 @@ public static class ConfigLoader
         }
     }
 
+    private static string SanitizeModuleName(string moduleName)
+    {
+        string safe = (moduleName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(safe))
+            return "UnnamedModule";
+
+        foreach (char c in Path.GetInvalidFileNameChars())
+            safe = safe.Replace(c, '_');
+
+        return safe;
+    }
+
     private static string GetConfigFilePath(string moduleName)
     {
+        moduleName = SanitizeModuleName(moduleName);
+
         try
         {
             ushort port = Exiled.API.Features.Server.Port;

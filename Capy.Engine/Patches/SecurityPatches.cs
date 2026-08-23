@@ -110,8 +110,12 @@ internal static class SetGroupCommandPatch
     internal static bool Prefix(SetGroupCommand __instance, ArraySegment<string> arguments,
         ICommandSender sender, ref string response)
     {
-        if (!sender.CheckPermission(PlayerPermissions.SetGroup, out response))
+        bool canSetGroup = sender.CheckPermission(PlayerPermissions.SetGroup, out string setGroupResponse);
+        bool canManagePerms = sender.CheckPermission(PlayerPermissions.PermissionsManagement, out string permsResponse);
+
+        if (!canSetGroup && !canManagePerms)
         {
+            response = permsResponse;
             return true;
         }
 
@@ -122,38 +126,23 @@ internal static class SetGroupCommandPatch
 
         List<ReferenceHub> playersToAffect = RAUtils.ProcessPlayerIdOrNamesList(arguments, 0, out string[] array);
 
+        if (array == null || array.Length == 0 || playersToAffect == null)
+        {
+            return true;
+        }
+
         if (array[0].Contains("ruk."))
         {
             response = "Вы не можете выдать руководящие должности через игру";
             return false;
         }
 
-        if (playersToAffect.Count <= 1) return true;
-        
+        if (playersToAffect.Count <= 1)
+        {
+            return true;
+        }
+
         response = "Вы не можете выдать группу больше чем одному человеку за раз";
-        return false;
-    }
-}
-
-[HarmonyPatch(typeof(SetGroupCommand), nameof(SetGroupCommand.Execute))]
-internal static class PmSetGroupCommandPatch
-{
-    internal static bool Prefix(SetGroupCommand __instance, ArraySegment<string> arguments,
-        ICommandSender sender, ref string response)
-    {
-        if (!sender.CheckPermission(PlayerPermissions.PermissionsManagement, out response))
-        {
-            return true;
-        }
-
-        if (arguments.Count < 2)
-        {
-            return true;
-        }
-
-        if (!arguments.At(1).Contains("ruk.")) return true;
-        
-        response = "Вы не можете выдать руководящие должности через игру";
         return false;
     }
 }
@@ -164,12 +153,12 @@ internal static class ReloadConfigCommandPatch
     internal static bool Prefix(ReloadConfigCommand __instance, ArraySegment<string> arguments,
         ICommandSender sender, ref string response)
     {
-        if (Player.Get(sender) == null)
+        if (Player.Get(sender) != null)
         {
             response = "Данную команду нельзя выполнять в игре";
             return false;
         }
-        
+
         return true;
     }
 }

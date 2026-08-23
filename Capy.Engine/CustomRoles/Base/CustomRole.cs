@@ -19,34 +19,49 @@ public abstract class CustomRole
 
     public readonly HashSet<string> TrackedPlayers = new();
 
+    private bool _assigning;
+
     public virtual void OnRegistered() { }
     public virtual void OnUnregistered() { }
 
     public virtual void OnAssigned(Player player)
     {
-        TrackedPlayers.Add(player.UserId);
+        if (player == null || string.IsNullOrEmpty(player.UserId)) return;
 
-        player.Role.Set(BaseRole);
-        player.MaxHealth = MaxHealth;
-        player.Health = MaxHealth;
-        player.HumeShield = HumeShield;
-
-        player.ClearInventory();
-        foreach (var item in StartingItems)
+        _assigning = true;
+        try
         {
-            player.AddItem(item);
+            TrackedPlayers.Add(player.UserId);
+
+            player.Role.Set(BaseRole);
+            player.MaxHealth = MaxHealth;
+            player.Health = MaxHealth;
+            player.HumeShield = HumeShield;
+
+            player.ClearInventory();
+            foreach (var item in StartingItems)
+            {
+                player.AddItem(item);
+            }
+
+            foreach (var (ammoType, amount) in StartingAmmo)
+            {
+                player.SetAmmo(ammoType, amount);
+            }
         }
-
-        foreach (var (ammoType, amount) in StartingAmmo)
+        finally
         {
-            player.SetAmmo(ammoType, amount);
+            _assigning = false;
         }
     }
 
     public virtual void OnRemoved(Player player)
     {
+        if (player == null) return;
         TrackedPlayers.Remove(player.UserId);
     }
 
     public bool IsPlayerRole(Player player) => player != null && TrackedPlayers.Contains(player.UserId);
+
+    internal bool IsAssigning => _assigning;
 }

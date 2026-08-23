@@ -207,6 +207,11 @@ public static class ModuleManager
         }
     }
 
+    public static void Clear()
+    {
+        Modules.Clear();
+    }
+
     public static bool ReloadAllConfigs(out string message)
     {
         try

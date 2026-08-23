@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,9 +9,13 @@ namespace Capy.API.DiscordBridge;
 
 public sealed class BridgeAuth : IDisposable
 {
+    private const int MinimumRsaKeySizeBits = 2048;
+    private const int MaxTrackedSignatures = 4096;
+
     private readonly DiscordBridgeConfig _config;
     private RSA? _rsaPublicKey;
     private readonly object _lock = new();
+    private readonly ConcurrentDictionary<string, DateTime> _seenSignatures = new();
 
     public BridgeAuth(DiscordBridgeConfig config)
     {
@@ -53,7 +58,17 @@ public sealed class BridgeAuth : IDisposable
             {
                 try
                 {
-                    _rsaPublicKey = ParsePublicKey(keyText);
+                    RSA? parsed = ParsePublicKey(keyText);
+
+                    if (parsed != null && parsed.KeySize < MinimumRsaKeySizeBits)
+                    {
+                        Log.Error($"[DiscordBridge.BridgeAuth] Открытый ключ слишком слабый ({parsed.KeySize} бит, минимум {MinimumRsaKeySizeBits}). Ключ отклонён.");
+                        parsed.Dispose();
+                        parsed = null;
+                    }
+
+                    _rsaPublicKey = parsed;
+
                     if (_rsaPublicKey != null)
                     {
                         Log.Info("[DiscordBridge.BridgeAuth] Открытый SSH/RSA ключ успешно загружен и активирован.");
@@ -132,6 +147,13 @@ public sealed class BridgeAuth : IDisposable
                     return false;
                 }
 
+                if (!TryMarkSignatureSeen(signatureBytes, timestamp))
+                {
+                    authError = "Replay rejected: this exact request was already processed.";
+                    Log.Warn("[DiscordBridge.BridgeAuth] Обнаружен повтор отправки подписанного запроса (replay attack).");
+                    return false;
+                }
+
                 return true;
             }
             catch (FormatException)
@@ -150,7 +172,7 @@ public sealed class BridgeAuth : IDisposable
         if (!string.IsNullOrWhiteSpace(_config.ApiKey) &&
             !_config.ApiKey.Equals("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(headerApiKey, _config.ApiKey, StringComparison.Ordinal))
+            if (TimingSafeEquals(headerApiKey, _config.ApiKey))
             {
                 return true;
             }
@@ -161,6 +183,43 @@ public sealed class BridgeAuth : IDisposable
 
         authError = "No valid authentication method configured.";
         return false;
+    }
+
+    private bool TryMarkSignatureSeen(byte[] signatureBytes, long timestampSeconds)
+    {
+        string fingerprint = ComputeSha256Hex(signatureBytes);
+        DateTime expiresAt = DateTimeOffset.FromUnixTimeSeconds(timestampSeconds)
+            .AddSeconds(Math.Max(10, _config.MaxClockDriftSeconds))
+            .UtcDateTime;
+
+        if (_seenSignatures.Count > MaxTrackedSignatures)
+            PruneSeenSignatures();
+
+        return _seenSignatures.TryAdd(fingerprint, expiresAt);
+    }
+
+    private void PruneSeenSignatures()
+    {
+        DateTime now = DateTime.UtcNow;
+
+        foreach (var pair in _seenSignatures)
+        {
+            if (pair.Value <= now)
+                _seenSignatures.TryRemove(pair.Key, out _);
+        }
+    }
+
+    private static bool TimingSafeEquals(string? provided, string expected)
+    {
+        using var sha = SHA256.Create();
+        byte[] a = sha.ComputeHash(Encoding.UTF8.GetBytes(provided ?? string.Empty));
+        byte[] b = sha.ComputeHash(Encoding.UTF8.GetBytes(expected ?? string.Empty));
+
+        int diff = 0;
+        for (int i = 0; i < a.Length; i++)
+            diff |= a[i] ^ b[i];
+
+        return diff == 0;
     }
 
     public static string ComputeSha256Hex(byte[] data)

@@ -2,6 +2,7 @@ using Capy.Core.Database;
 using Capy.Core.DRM;
 using Capy.Core.Loader;
 using Capy.Core.Services;
+using Capy.Engine;
 using Capy.Engine.Audio;
 using Capy.Engine.CustomItems.Manager;
 using Capy.Engine.CustomRoles.Manager;
@@ -16,22 +17,23 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
     public override string Name => "CapyLib";
     public override string Author => "CapybaraPR";
     public override string Prefix => "capylib";
-    public override Version Version => new(1, 3, 0);
+    public override Version Version => new(1, 3, 1);
 
     public static CapyPlugin Instance { get; private set; } = null!;
 
     public ModuleLoader Loader { get; private set; } = null!;
     public IDatabaseProvider Database { get; private set; } = null!;
     private HarmonyLib.Harmony? _harmony;
+    private bool _licenseBlocked;
+    private bool _modulesDeferred;
 
     public override void OnEnabled()
     {
         Instance = this;
 
-        // Создание базовых каталогов
         SafeExecute("Directories", EnsureDirectories);
+        SafeExecute("PlayerStateCleaner", PlayerStateCleaner.EnsureSubscribed);
 
-        // 0. Harmony Patches
         SafeExecute("HarmonyPatches", () =>
         {
             _harmony = new HarmonyLib.Harmony($"capylib.patches.{DateTime.UtcNow.Ticks}");
@@ -39,39 +41,20 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
             Log.Info("[CapyLib] Harmony-патчи успешно применены.");
         });
 
-        // 1. Инициализация DRM лицензии
-        string licenseKey = GetOrCreateLicenseKey();
-        SafeExecute("LicenseCheck", () =>
-        {
-            var task = LicenseManager.VerifyAsync(Config.LicenseServerUrl, licenseKey);
-            task.Wait();
-            if (!task.Result)
-            {
-                LicenseManager.EnforceProtection();
-            }
-            else
-            {
-                LicenseManager.StartLicenseLoop(Config.LicenseServerUrl, licenseKey, Config.LicenseCheckIntervalSeconds);
-            }
-        });
+        SafeExecute("LicenseCheck", RunLicenseActivation);
 
-        // 2. Инициализация базы данных
+        if (_licenseBlocked)
+        {
+            Log.Error("[CapyLib] Загрузка подсистем CapyLib отменена: лицензия не действительна.");
+            base.OnEnabled();
+            return;
+        }
+
         SafeExecute("Database", InitializeDatabase);
-
-        // 3. Инициализация плейсхолдеров
         SafeExecute("Placeholders", PlaceholderReplacer.RegisterDefaults);
+        SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);        if (!_modulesDeferred)
+            SafeExecute("ModuleLoader", InitializeModules);
 
-        // 4. Регистрация аудиоклипов
-        SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);
-
-        // 5. Загрузка модулей
-        SafeExecute("ModuleLoader", () =>
-        {
-            Loader = new ModuleLoader();
-            Loader.InitializeAsync().Wait();
-        });
-
-        // 6. Вывод загрузочного баннера в стиле AspectLib
         SafeExecute("ServerBanner", ServerBanner.Show);
 
         base.OnEnabled();
@@ -85,13 +68,20 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
             _harmony = null;
         });
 
-        SafeExecute("LicenseStop", LicenseManager.Stop);
+        SafeExecute("LicenseStop", () =>
+        {
+            LicenseManager.LicenseConfirmed -= OnLicenseConfirmed;
+            LicenseManager.Stop();
+        });
+        SafeExecute("PlayerStateCleaner", PlayerStateCleaner.Shutdown);
         SafeExecute("CustomRoles.Disable", CustomRolesManager.UnregisterAll);
         SafeExecute("CustomItems.Disable", CustomItemsManager.UnregisterAll);
         SafeExecute("EventHandlers.Disable", EventRegistrar.UnregisterAll);
+        SafeExecute("AudioRegistry.Unload", AudioRegistry.UnloadAll);
         SafeExecute("EventBus.Clear", EventBus.Clear);
 
         SafeExecute("ModuleLoader.Shutdown", () => Loader?.ShutdownAsync().Wait());
+        SafeExecute("ModuleManager.Clear", ModuleManager.Clear);
         SafeExecute("Database.Shutdown", () => Database?.Shutdown());
 
         Instance = null!;
@@ -107,8 +97,42 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         }
         catch (Exception ex)
         {
-            Log.Error($"[CapyLib] Ошибка инициализации подсистемы '{name}': {ex.Message}");
+            Log.Error($"[CapyLib] Ошибка инициализации подсистемы '{name}': {ex}");
         }
+    }
+
+    private void RunLicenseActivation()
+    {
+        LicenseManager.LicenseConfirmed += OnLicenseConfirmed;
+
+        LicenseActivation activation = LicenseManager
+            .ActivateAsync(Config.LicenseServerUrl, GetOrCreateLicenseKey(), Config.LicenseCheckIntervalSeconds)
+            .GetAwaiter().GetResult();
+
+        switch (activation)
+        {
+            case LicenseActivation.Blocked:
+                _licenseBlocked = true;
+                break;
+
+            case LicenseActivation.Deferred:
+                _modulesDeferred = true;
+                break;
+        }
+    }
+
+    private void OnLicenseConfirmed()
+    {
+        LicenseManager.LicenseConfirmed -= OnLicenseConfirmed;
+
+        SafeExecute("ModuleLoader", InitializeModules);
+        SafeExecute("ServerBanner", ServerBanner.Show);
+    }
+
+    private void InitializeModules()
+    {
+        Loader ??= new ModuleLoader();
+        Loader.InitializeAsync().GetAwaiter().GetResult();
     }
 
     private void InitializeDatabase()

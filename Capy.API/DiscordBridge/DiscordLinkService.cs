@@ -25,6 +25,10 @@ public sealed class DiscordLinkService : IDisposable
     private Dictionary<string, DiscordLinkRecord> _linksByGameUserId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<ulong, string> _gameUserIdByDiscordId = new();
     private readonly Dictionary<string, PendingDiscordLink> _pendingByCode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _failedAttemptsByCode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> _lastAttemptByUser = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _lockoutUntilByUser = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (int Count, DateTime WindowStartUtc)> _failuresByUser = new(StringComparer.OrdinalIgnoreCase);
 
     public DiscordLinkService(DiscordBridgeConfig config)
     {
@@ -48,7 +52,7 @@ public sealed class DiscordLinkService : IDisposable
                          .Select(pair => pair.Key)
                          .ToList())
             {
-                _pendingByCode.Remove(oldCode);
+                RemovePendingCodeUnsafe(oldCode);
             }
 
             string code;
@@ -58,7 +62,7 @@ public sealed class DiscordLinkService : IDisposable
             }
             while (_pendingByCode.ContainsKey(code));
 
-            int lifetimeMinutes = Math.Max(1, Math.Min(_config.LinkCodeLifetimeMinutes, 60));
+            int lifetimeMinutes = Math.Max(1, Math.Min(_config.LinkCodeLifetimeMinutes, 15));
             DateTime expiresUtc = now.AddMinutes(lifetimeMinutes);
             _pendingByCode[code] = new PendingDiscordLink
             {
@@ -106,9 +110,33 @@ public sealed class DiscordLinkService : IDisposable
             DateTime now = DateTime.UtcNow;
             RemoveExpiredCodesUnsafe(now);
 
+            if (IsUserLockedUnsafe(normalizedGameUserId, now, out TimeSpan lockRemaining))
+            {
+                error = $"Слишком много неверных попыток. Повторите через {Math.Ceiling(lockRemaining.TotalMinutes)} мин.";
+                return false;
+            }
+
+            if (!IsCooldownElapsedUnsafe(normalizedGameUserId, now, out TimeSpan cooldownRemaining))
+            {
+                error = $"Слишком часто. Повторите через {Math.Ceiling(cooldownRemaining.TotalSeconds)} с.";
+                return false;
+            }
+
+            _lastAttemptByUser[normalizedGameUserId] = now;
+
             if (!_pendingByCode.TryGetValue(normalizedCode, out PendingDiscordLink? pending))
             {
+                RegisterFailedAttemptUnsafe(normalizedGameUserId, now);
                 error = "Код не найден или срок его действия истёк. Запросите новый в Discord через /steamsl.";
+                return false;
+            }
+
+            if (_failedAttemptsByCode.TryGetValue(normalizedCode, out int codeFailures) &&
+                codeFailures >= Math.Max(1, _config.LinkMaxFailedAttemptsPerCode))
+            {
+                RemovePendingCodeUnsafe(normalizedCode);
+                RegisterFailedAttemptUnsafe(normalizedGameUserId, now);
+                error = "Код заблокирован из-за неверных попыток. Запросите новый в Discord через /steamsl.";
                 return false;
             }
 
@@ -149,6 +177,8 @@ public sealed class DiscordLinkService : IDisposable
             }
 
             _pendingByCode.Remove(normalizedCode);
+            _failedAttemptsByCode.Remove(normalizedCode);
+            _failuresByUser.Remove(normalizedGameUserId);
             linkedAccount = Clone(record);
             error = string.Empty;
             Log.Info($"[DiscordBridge] Discord {record.DiscordUserName} ({record.DiscordUserId}) успешно привязан к {record.GameUserId}.");
@@ -261,7 +291,91 @@ public sealed class DiscordLinkService : IDisposable
 
         foreach (string code in expired)
         {
-            _pendingByCode.Remove(code);
+            RemovePendingCodeUnsafe(code);
+        }
+
+        List<string> staleLocks = _lockoutUntilByUser
+            .Where(pair => pair.Value <= now)
+            .Select(pair => pair.Key)
+            .ToList();
+
+        foreach (string user in staleLocks)
+        {
+            _lockoutUntilByUser.Remove(user);
+            _lastAttemptByUser.Remove(user);
+        }
+
+        List<string> staleWindows = _failuresByUser
+            .Where(pair => now - pair.Value.WindowStartUtc > TimeSpan.FromMinutes(30))
+            .Select(pair => pair.Key)
+            .ToList();
+
+        foreach (string user in staleWindows)
+        {
+            _failuresByUser.Remove(user);
+        }
+
+        List<string> staleAttempts = _lastAttemptByUser
+            .Where(pair => now - pair.Value > TimeSpan.FromHours(1))
+            .Select(pair => pair.Key)
+            .ToList();
+
+        foreach (string user in staleAttempts)
+        {
+            _lastAttemptByUser.Remove(user);
+        }
+    }
+
+    private void RemovePendingCodeUnsafe(string code)
+    {
+        _pendingByCode.Remove(code);
+        _failedAttemptsByCode.Remove(code);
+    }
+
+    private bool IsUserLockedUnsafe(string user, DateTime now, out TimeSpan remaining)
+    {
+        remaining = TimeSpan.Zero;
+
+        if (_lockoutUntilByUser.TryGetValue(user, out DateTime until))
+        {
+            if (until > now)
+            {
+                remaining = until - now;
+                return true;
+            }
+
+            _lockoutUntilByUser.Remove(user);
+        }
+
+        return false;
+    }
+
+    private bool IsCooldownElapsedUnsafe(string user, DateTime now, out TimeSpan wait)
+    {
+        wait = TimeSpan.Zero;
+
+        int cooldown = Math.Max(0, _config.LinkRedeemCooldownSeconds);
+        if (cooldown == 0 || !_lastAttemptByUser.TryGetValue(user, out DateTime last))
+            return true;
+
+        wait = last.AddSeconds(cooldown) - now;
+        return wait <= TimeSpan.Zero;
+    }
+
+    private void RegisterFailedAttemptUnsafe(string user, DateTime now)
+    {
+        if (!_failuresByUser.TryGetValue(user, out var window) || now - window.WindowStartUtc > TimeSpan.FromMinutes(30))
+            window = (0, now);
+
+        window.Count++;
+        _failuresByUser[user] = window;
+
+        int perPlayerLimit = Math.Max(1, _config.LinkMaxFailedAttemptsPerPlayer);
+        if (window.Count >= perPlayerLimit)
+        {
+            _lockoutUntilByUser[user] = now.AddMinutes(Math.Max(1, _config.LinkLockoutMinutes));
+            _failuresByUser.Remove(user);
+            Log.Warn($"[DiscordBridge] {user} заблокирован на {_config.LinkLockoutMinutes} мин за перебор кодов привязки.");
         }
     }
 

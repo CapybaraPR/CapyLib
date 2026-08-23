@@ -44,6 +44,7 @@ public static class CustomItemsManager
             Exiled.Events.Handlers.Player.DroppedItem -= OnDroppedItem;
             Exiled.Events.Handlers.Player.ChangedItem -= OnChangedItem;
             Exiled.Events.Handlers.Scp914.UpgradingPickup -= OnUpgradingPickup;
+            Exiled.Events.Handlers.Server.RestartingRound -= OnRestartingRound;
             _isSubscribed = false;
         }
     }
@@ -56,7 +57,20 @@ public static class CustomItemsManager
         Exiled.Events.Handlers.Player.DroppedItem += OnDroppedItem;
         Exiled.Events.Handlers.Player.ChangedItem += OnChangedItem;
         Exiled.Events.Handlers.Scp914.UpgradingPickup += OnUpgradingPickup;
+        Exiled.Events.Handlers.Server.RestartingRound += OnRestartingRound;
         _isSubscribed = true;
+    }
+
+    private static void OnRestartingRound()
+    {
+        foreach (var item in RegisteredItems)
+        {
+            try
+            {
+                item.TrackedSerials.Clear();
+            }
+            catch { }
+        }
     }
 
     public static CustomItem? GetBySerial(ushort serial)
@@ -110,7 +124,6 @@ public static class CustomItemsManager
         var customItem = GetBySerial(ev.Pickup.Serial);
         if (customItem != null)
         {
-            // Кастомные предметы защищены от случайной перезаписи SCP-914
             ev.IsAllowed = false;
         }
     }
