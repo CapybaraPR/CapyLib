@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using Exiled.API.Features;
 using PlayerRoles;
 using PlayerStatsSystem;
@@ -62,6 +62,6 @@ public static class HudLayout {
 
         if (target.Role.Type == RoleTypeId.Scp106) offset += 42f;
 
-        return new Vector2(-345f, 980f - offset);
+        return new Vector2(-295f, 980f - offset);
     }
 }
