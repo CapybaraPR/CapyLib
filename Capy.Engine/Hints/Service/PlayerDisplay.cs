@@ -86,14 +86,21 @@ public class PlayerDisplay
         }
 
         // Группировка подсказок по зонам экрана
+        var topCenter = activeHints.Where(h => h.Zone == HintZone.TopCenter || h.Zone == HintZone.Notification).ToList();
         var upperLeft = activeHints.Where(h => h.Zone == HintZone.UpperLeft).ToList();
         var upperRight = activeHints.Where(h => h.Zone == HintZone.UpperRight).ToList();
-        var notifications = activeHints.Where(h => h.Zone == HintZone.Notification).ToList();
         var lowerCenter = activeHints.Where(h => h.Zone == HintZone.LowerCenter).ToList();
         var lowerLeft = activeHints.Where(h => h.Zone == HintZone.LowerLeft).ToList();
         var bottomCenter = activeHints.Where(h => h.Zone == HintZone.BottomCenter).ToList();
 
-        // 1. Верхние зоны (Чат / Отряд)
+        // 1. Верх по центру (Зона стандартных бродкастов / системных оповещений)
+        if (topCenter.Count > 0)
+        {
+            foreach (var hint in topCenter)
+                sb.AppendLine($"<align=center><voffset=380><size={hint.FontSize}>{hint.Text}</size></voffset></align>");
+        }
+
+        // 2. Верхние боковые зоны (Чат слева / Отряд справа)
         if (upperLeft.Count > 0 || upperRight.Count > 0)
         {
             foreach (var hint in upperLeft)
@@ -101,13 +108,6 @@ public class PlayerDisplay
 
             foreach (var hint in upperRight)
                 sb.AppendLine($"<align=right><pos=98%><size={hint.FontSize}>{hint.Text}</size></pos></align>");
-        }
-
-        // 2. Центральные уведомления / Бродкасты
-        if (notifications.Count > 0)
-        {
-            foreach (var hint in notifications)
-                sb.AppendLine($"<align=center><size={hint.FontSize}>{hint.Text}</size></align>");
         }
 
         // 3. Карточка предмета в руках (LowerCenter)
@@ -124,7 +124,7 @@ public class PlayerDisplay
                 sb.AppendLine($"<align=left><pos=2%><size={hint.FontSize}>{hint.Text}</size></pos></align>");
         }
 
-        // 5. Подбор / выброс предметов (BottomCenter)
+        // 5. Подбор / выброс предметов и хитмаркеры (BottomCenter)
         if (bottomCenter.Count > 0)
         {
             foreach (var hint in bottomCenter)
