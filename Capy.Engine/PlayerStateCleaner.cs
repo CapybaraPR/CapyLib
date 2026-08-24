@@ -52,6 +52,10 @@ public static class PlayerStateCleaner
             GlobalCooldown.RemoveAllOwnedBy(player);
             GlobalCooldown.RemoveAllOwnedBy(player.UserId);
             PlayerData.Remove(player.UserId);
+
+            // Аудио-плеер и тегированные хинты тоже привязаны к игроку
+            Capy.Engine.Audio.AudioToggle.DestroyForPlayer(player);
+            player.ClearHints();
         }
         catch (Exception ex)
         {
