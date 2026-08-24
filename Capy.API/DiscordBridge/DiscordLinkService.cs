@@ -420,7 +420,15 @@ public sealed class DiscordLinkService : IDisposable
 
         var store = new List<DiscordLinkRecord>(_linksByGameUserId.Values);
         string json = JsonSerializer.Serialize(store, StorageJsonOptions);
-        File.WriteAllText(_storagePath, json, Encoding.UTF8);
+
+        // Атомарная запись: сначала во временный файл, затем замена —
+        // краш в момент записи не уничтожит все привязки
+        string tempPath = _storagePath + ".tmp";
+        File.WriteAllText(tempPath, json, Encoding.UTF8);
+        if (File.Exists(_storagePath))
+            File.Replace(tempPath, _storagePath, null);
+        else
+            File.Move(tempPath, _storagePath);
     }
 
     private void Load()

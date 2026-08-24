@@ -40,6 +40,9 @@ public static class HudModule
         PlayerHandlers.ChangingSpectatedPlayer -= OnChangingSpectatedPlayer;
         PlayerHandlers.Died -= OnPlayerDied;
 
+        // Сбрасываем внешний HUD-провайдер (регистрируется внешними плагинами, например ToolGun'ом)
+        Capy.Engine.Hud.Panels.ItemHudPanel.ExternalItemHudProvider = null;
+
         foreach (var hud in Huds.Values)
         {
             try { hud.Destroy(); }

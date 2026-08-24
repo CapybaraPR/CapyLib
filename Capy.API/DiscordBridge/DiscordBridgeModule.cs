@@ -63,6 +63,8 @@ public sealed class DiscordBridgeModule : BaseModule<DiscordBridgeConfig>
     {
         try
         {
+            BridgeXpRegistry.Clear();
+
             _apiServer?.Stop();
             _apiServer = null;
 

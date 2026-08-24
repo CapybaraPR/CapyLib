@@ -71,7 +71,11 @@ public class StatsEventHandlers
     {
         if (ev.Player == null) return;
 
-        if (_activeSessions.TryRemove(ev.Player.Id, out var session))
+        // Защита от переиспользования Player.Id: сессия должна принадлежать именно этому игроку
+        if (_activeSessions.TryGetValue(ev.Player.Id, out var session) && session.UserId != ev.Player.UserId)
+            _activeSessions.TryRemove(ev.Player.Id, out _);
+
+        if (_activeSessions.TryRemove(ev.Player.Id, out session))
         {
             try
             {

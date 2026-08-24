@@ -37,7 +37,9 @@ internal sealed class MainThreadDispatcher
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+        // ВАЖНО: cts нельзя диспозить синхронно — таймаут должен продолжать тикать
+        // после выхода из этого метода. Освобождаем его в continuation задачи.
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
         using CancellationTokenRegistration registration = cts.Token.Register(
             () => tcs.TrySetException(new TimeoutException("Таймаут выполнения задачи на главном потоке сервера.")));
 
@@ -63,7 +65,11 @@ internal sealed class MainThreadDispatcher
             tcs.TrySetException(new InvalidOperationException("Очередь моста недоступна или переполнена."));
         }
 
-        return tcs.Task;
+        return tcs.Task.ContinueWith(
+            t => { cts.Dispose(); return t; },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default).Unwrap();
     }
 
     public Task InvokeAsync(Action action, int timeoutSeconds = 8)

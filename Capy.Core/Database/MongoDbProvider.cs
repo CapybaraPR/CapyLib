@@ -28,6 +28,7 @@ public class MongoDbProvider : IDatabaseProvider
             _client = new MongoClient(_connectionString);
             _database = _client.GetDatabase(_databaseName);
             _players = _database.GetCollection<PlayerDataModel>("players");
+            _players.Indexes.CreateOne(new CreateIndexModel<PlayerDataModel>(Builders<PlayerDataModel>.IndexKeys.Descending(x => x.Xp)));
             Log.Info($"[MongoDbProvider] Коллекция '{_databaseName}.players' инициализирована (подключение устанавливается лениво драйвером).");
         }
         catch (Exception ex)

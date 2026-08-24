@@ -36,4 +36,13 @@ public static class BridgeXpRegistry
 
     /// <summary>Возвращает топ игроков по опыту. null — система выключена.</summary>
     public static Func<int, List<XpLeaderboardEntry>?>? GetLeaderboard { get; set; }
+
+    /// <summary>
+    /// Снимает всех поставщиков (вызывается при выгрузке плагина-провайдера).
+    /// </summary>
+    public static void Clear()
+    {
+        GetXp = null;
+        GetLeaderboard = null;
+    }
 }
