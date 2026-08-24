@@ -480,3 +480,33 @@ public sealed class StaffMemberResponse
     public Capy.Core.Database.Models.StaffMemberModel? Member { get; set; }
 }
 
+public sealed class XpResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("found")]
+    public bool Found { get; set; }
+
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = string.Empty;
+
+    [JsonPropertyName("xp")]
+    public float Xp { get; set; }
+
+    [JsonPropertyName("level_text")]
+    public string LevelText { get; set; } = string.Empty;
+
+    [JsonPropertyName("level_color")]
+    public string LevelColor { get; set; } = string.Empty;
+}
+
+public sealed class XpLeaderboardResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; } = true;
+
+    [JsonPropertyName("entries")]
+    public List<XpLeaderboardEntry> Entries { get; set; } = new();
+}
+

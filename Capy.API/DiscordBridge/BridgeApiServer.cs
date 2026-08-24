@@ -344,6 +344,14 @@ public sealed class BridgeApiServer : IDisposable
                 await HandleRemoveStaffAsync(context.Response, bodyBytes).ConfigureAwait(false);
                 break;
 
+            case "/xp" when method == "GET":
+                HandleGetXp(context);
+                break;
+
+            case "/xp/leaderboard" when method == "GET":
+                HandleGetXpLeaderboard(context);
+                break;
+
             default:
                 await RespondJsonAsync(context.Response, HttpStatusCode.NotFound, new ErrorResponse { Error = $"Эндпоинт {method} {path} не найден." }).ConfigureAwait(false);
                 break;
@@ -354,6 +362,85 @@ public sealed class BridgeApiServer : IDisposable
     {
         List<Capy.Core.Database.Models.StaffMemberModel> staff = _staffService.GetAllStaff(activeOnly: true);
         RespondJson(response, HttpStatusCode.OK, new StaffListResponse { Success = true, Staff = staff });
+    }
+
+    private void HandleGetXp(HttpListenerContext context)
+    {
+        string? userId = context.Request.QueryString["user_id"];
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            RespondJson(context.Response, HttpStatusCode.BadRequest, new ErrorResponse { Error = "Параметр user_id обязателен." });
+            return;
+        }
+
+        var hook = BridgeXpRegistry.GetXp;
+        if (hook == null)
+        {
+            RespondJson(context.Response, HttpStatusCode.ServiceUnavailable, new ErrorResponse { Error = "Система опыта не активна на этом сервере." });
+            return;
+        }
+
+        XpSnapshot? snapshot;
+        try
+        {
+            snapshot = hook(userId);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[DiscordBridge.ApiServer] Ошибка получения XP {userId}: {ex}");
+            snapshot = null;
+        }
+
+        if (snapshot == null)
+        {
+            RespondJson(context.Response, HttpStatusCode.OK, new XpResponse { Success = true, Found = false, UserId = userId });
+            return;
+        }
+
+        RespondJson(context.Response, HttpStatusCode.OK, new XpResponse
+        {
+            Success = true,
+            Found = true,
+            UserId = userId,
+            Xp = snapshot.Xp,
+            LevelText = snapshot.LevelText,
+            LevelColor = snapshot.LevelColor
+        });
+    }
+
+    private void HandleGetXpLeaderboard(HttpListenerContext context)
+    {
+        string? countRaw = context.Request.QueryString["count"];
+        int count = 10;
+        if (!string.IsNullOrWhiteSpace(countRaw) && (!int.TryParse(countRaw, out count) || count < 1))
+            count = 10;
+
+        count = Math.Min(count, 50);
+
+        var hook = BridgeXpRegistry.GetLeaderboard;
+        if (hook == null)
+        {
+            RespondJson(context.Response, HttpStatusCode.ServiceUnavailable, new ErrorResponse { Error = "Система опыта не активна на этом сервере." });
+            return;
+        }
+
+        List<XpLeaderboardEntry>? entries;
+        try
+        {
+            entries = hook(count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[DiscordBridge.ApiServer] Ошибка лидерборда XP: {ex}");
+            entries = null;
+        }
+
+        RespondJson(context.Response, HttpStatusCode.OK, new XpLeaderboardResponse
+        {
+            Success = true,
+            Entries = entries ?? new List<XpLeaderboardEntry>()
+        });
     }
 
     private static T? DeserializeBody<T>(byte[] bodyBytes)
