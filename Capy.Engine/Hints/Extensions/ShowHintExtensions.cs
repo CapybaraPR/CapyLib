@@ -144,6 +144,7 @@ public static class ShowHintExtensions
             HintZone.UpperLeft => (-420f, 120f, HintAlignment.Left, HintVerticalAlign.Top),
             HintZone.UpperRight => (420f, 120f, HintAlignment.Right, HintVerticalAlign.Top),
             HintZone.LowerLeft => (-420f, 750f, HintAlignment.Left, HintVerticalAlign.Middle),
+            HintZone.LowerRight => (420f, 750f, HintAlignment.Right, HintVerticalAlign.Middle),
             HintZone.LowerCenter => (0f, 720f, HintAlignment.Center, HintVerticalAlign.Middle),
             HintZone.BottomCenter => (0f, 850f, HintAlignment.Center, HintVerticalAlign.Top),
             _ => (0f, 150f, HintAlignment.Center, HintVerticalAlign.Top)
