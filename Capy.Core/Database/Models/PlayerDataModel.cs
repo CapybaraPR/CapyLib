@@ -15,6 +15,11 @@ public class PlayerDataModel
     public int RoundsPlayed { get; set; }
     public long TotalPlaytimeSeconds { get; set; }
 
+    /// <summary>
+    /// Накопленный опыт игрока (система уровней капибары).
+    /// </summary>
+    public float Xp { get; set; }
+
     public double Balance { get; set; }
     public DateTime FirstJoin { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;

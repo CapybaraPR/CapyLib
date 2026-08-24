@@ -12,19 +12,20 @@ public sealed class TopCommand : ICommand
 {
     public string Command { get; } = "top";
     public string[] Aliases { get; } = { "leaderboard", "lb" };
-    public string Description { get; } = "Таблица лидеров сервера по убийствам, времени или раундам.";
+    public string Description { get; } = "Таблица лидеров сервера по опыту, убийствам, времени или раундам.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         string mode = (arguments.Count > 0 && arguments.Array != null)
             ? arguments.Array[arguments.Offset].ToLowerInvariant()
-            : "kills";
+            : "xp";
 
         string field = mode switch
         {
             "time" or "playtime" => nameof(PlayerDataModel.TotalPlaytimeSeconds),
             "rounds" => nameof(PlayerDataModel.RoundsPlayed),
-            _ => nameof(PlayerDataModel.Kills)
+            "kills" => nameof(PlayerDataModel.Kills),
+            _ => nameof(PlayerDataModel.Xp)
         };
 
         IReadOnlyList<PlayerDataModel> top = CapyPlugin.Instance?.Database?.GetTopPlayers(field, 10)
@@ -40,7 +41,23 @@ public sealed class TopCommand : ICommand
         sb.AppendLine();
         sb.AppendLine("<color=#ffa94e>============================================================</color>");
 
-        if (mode == "time" || mode == "playtime")
+        if (mode == "xp" || mode == "level")
+        {
+            sb.AppendLine("<b><color=#ffd285>            [ ТОП-10 КАПИБАР ПО ОПЫТУ ]</color></b>");
+            sb.AppendLine("<color=#ffa94e>============================================================</color>");
+
+            int rank = 1;
+            foreach (var p in top)
+            {
+                string rankTag = rank <= 3 ? $"<color=#ffd285>[#{rank}]</color>" : $"<color=#c2c2c2>[#{rank}]</color>";
+                string name = !string.IsNullOrEmpty(p.LastNickname) ? p.LastNickname : p.Id.Replace("@steam", "");
+                sb.AppendLine($"{rankTag} <color=#ffffff>{name}</color> <color=#c2c2c2>--</color> <color=#ffe91f>{p.Xp:F0} XP</color> <color=#c2c2c2>(Убийств:</color> <color=#a3e635>{p.Kills}</color><color=#c2c2c2> | Онлайн:</color> <color=#58b9ff>{FormatTime(p.TotalPlaytimeSeconds)}</color><color=#c2c2c2>)</color>");
+                rank++;
+            }
+            sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");
+            sb.AppendLine("<color=#ffd285>>> Титулы и Discord-синхронизация: /level и /top в нашем Discord!</color>");
+        }
+        else if (mode == "time" || mode == "playtime")
         {
             sb.AppendLine("<b><color=#ffd285>              [ ТОП-10 ИГРОКОВ ПО ОНЛАЙНУ ]</color></b>");
             sb.AppendLine("<color=#ffa94e>============================================================</color>");
@@ -83,7 +100,7 @@ public sealed class TopCommand : ICommand
                 rank++;
             }
             sb.AppendLine("<color=#ffa94e>------------------------------------------------------------</color>");
-            sb.AppendLine("<color=#ffd285>>> Совет: используйте '.top time' для просмотра топа по онлайну!</color>");
+            sb.AppendLine("<color=#ffd285>>> Совет: '.top xp' — топ по опыту, '.top time' — по онлайну!</color>");
         }
 
         sb.Append("<color=#ffa94e>============================================================</color>");
