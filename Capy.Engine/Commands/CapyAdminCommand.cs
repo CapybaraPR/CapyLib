@@ -16,17 +16,39 @@ namespace Capy.Commands;
 /// Доступна через .capy или .al.
 /// </summary>
 [CommandHandler(typeof(RemoteAdminCommandHandler))]
+[CommandHandler(typeof(GameConsoleCommandHandler))]
 [CommandHandler(typeof(ClientCommandHandler))]
 public class CapyAdminCommand : ParentCommand
 {
+    public static CapyAdminCommand? Instance { get; private set; }
+    private static readonly List<ICommand> DynamicSubcommands = new();
+
     public CapyAdminCommand() => LoadGeneratedCommands();
 
     public override string Command => "capy";
-    public override string[] Aliases => new[] { "al", "capylib", "cl" };
-    public override string Description => "Служебные команды и управление CapyLib";
+    public override string[] Aliases => new[] { "al", "capylib", "cl", "капи" };
+    public override string Description => "Управление CapyLib, модулями и персоналом (Remote Admin)";
+
+    public static void RegisterSubcommand(ICommand cmd)
+    {
+        if (cmd == null) return;
+        lock (DynamicSubcommands)
+        {
+            if (!DynamicSubcommands.Any(c => c.Command.Equals(cmd.Command, StringComparison.OrdinalIgnoreCase)))
+                DynamicSubcommands.Add(cmd);
+        }
+
+        try
+        {
+            Instance?.RegisterCommand(cmd);
+        }
+        catch { }
+    }
 
     public override void LoadGeneratedCommands()
     {
+        Instance = this;
+
         RegisterCommand(new StaffSubcommand());
         RegisterCommand(new ListSubcommand());
         RegisterCommand(new ToggleSubcommand());
@@ -34,34 +56,51 @@ public class CapyAdminCommand : ParentCommand
         RegisterCommand(new DisableSubcommand());
         RegisterCommand(new RestartSubcommand());
         RegisterCommand(new ReloadSubcommand());
+
+        lock (DynamicSubcommands)
+        {
+            foreach (var cmd in DynamicSubcommands)
+            {
+                try { RegisterCommand(cmd); } catch { }
+            }
+        }
     }
 
     protected override bool ExecuteParent(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         bool isDev = ModuleManager.CheckAccess(sender);
         Player? player = Player.Get(sender);
+        bool isStaff = player == null || player.RemoteAdminAccess || !string.IsNullOrEmpty(player.GroupName);
 
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine("<color=#ffa94e>============================================================</color>");
-        sb.AppendLine("<b><color=#ffd285>              [ CAPYLIB • СЛУЖЕБНЫЕ КОМАНДЫ ]</color></b>");
+        sb.AppendLine("<b><color=#ffd285>          [ CAPYLIB • ПАНЕЛЬ АДМИНИСТРИРОВАНИЯ ]</color></b>");
         sb.AppendLine("<color=#ffa94e>============================================================</color>");
         sb.AppendLine();
-        sb.AppendLine("<color=#58b9ff>>> ДЛЯ АДМИНИСТРАЦИИ:</color>");
-        sb.AppendLine("  <color=#ffd285>* .capy staff</color>           <color=#c2c2c2>-- Проверить свои часы за неделю и норму</color>");
+
+        if (isStaff)
+        {
+            sb.AppendLine("<color=#58b9ff>>> ДЛЯ АДМИНИСТРАЦИИ (STAFF):</color>");
+            sb.AppendLine("  <color=#ffd285>* capy staff [ник/steamid]</color> <color=#c2c2c2>-- Проверить норму и часы сотрудника</color>");
+            sb.AppendLine();
+        }
 
         if (isDev)
         {
+            sb.AppendLine("<color=#f87171>>> ДЛЯ РАЗРАБОТЧИКОВ (DEV • МОДУЛИ ЯДРА):</color>");
+            sb.AppendLine("  <color=#ffd285>* capy list</color>               <color=#c2c2c2>-- Список всех модулей CapyLib и их статус</color>");
+            sb.AppendLine("  <color=#ffd285>* capy toggle <модуль></color>    <color=#c2c2c2>-- Включить / выключить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* capy enable <модуль></color>    <color=#c2c2c2>-- Включить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* capy disable <модуль></color>   <color=#c2c2c2>-- Отключить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* capy restart <модуль></color>   <color=#c2c2c2>-- Перезапустить модуль</color>");
+            sb.AppendLine("  <color=#ffd285>* capy reload</color>             <color=#c2c2c2>-- Перезагрузить конфигурации</color>");
             sb.AppendLine();
-            sb.AppendLine("<color=#f87171>>> ДЛЯ РАЗРАБОТЧИКОВ (DEV):</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy list</color>            <color=#c2c2c2>-- Список всех зарегистрированных модулей</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy toggle <модуль></color> <color=#c2c2c2>-- Переключить состояние модуля</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy enable <модуль></color> <color=#c2c2c2>-- Включить модуль</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy disable <модуль></color><color=#c2c2c2>-- Отключить модуль</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy restart <модуль></color><color=#c2c2c2>-- Перезапустить модуль</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy reload</color>          <color=#c2c2c2>-- Перезагрузить конфигурации</color>");
         }
 
+        sb.AppendLine("<color=#a3e635>>> ИГРОВЫЕ КОМАНДЫ (ВВОДЯТСЯ В КОНСОЛИ `~` ЧЕРЕЗ ТОЧКУ):</color>");
+        sb.AppendLine("  <color=#ffd285>.menu</color> — Справка по всем командам сервера");
+        sb.AppendLine("  <color=#ffd285>.stats</color> — Личная статистика | <color=#ffd285>.top</color> — Лидерборд");
         sb.Append("<color=#ffa94e>============================================================</color>");
 
         if (player != null)
@@ -73,6 +112,52 @@ public class CapyAdminCommand : ParentCommand
 
         response = sb.ToString();
         return true;
+    }
+}
+
+public class HelpSubcommand : ICommand
+{
+    public string Command => "help";
+    public string[] Aliases => new[] { "cmds", "cmd", "commands", "menu", "хелп", "меню" };
+    public string Description => "Справка по командам сервера.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        string msg = HelpMessageBuilder.Build(sender);
+        Player? player = Player.Get(sender);
+        if (player != null)
+        {
+            player.SendConsoleMessage(msg, "white");
+            response = string.Empty;
+            return true;
+        }
+
+        response = msg;
+        return true;
+    }
+}
+
+public class StatsSubcommand : ICommand
+{
+    public string Command => "stats";
+    public string[] Aliases => new[] { "profile", "me" };
+    public string Description => "Просмотр личной статистики.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        return new StatsCommand().Execute(arguments, sender, out response);
+    }
+}
+
+public class TopSubcommand : ICommand
+{
+    public string Command => "top";
+    public string[] Aliases => new[] { "leaderboard", "lb" };
+    public string Description => "Просмотр топа игроков сервера.";
+
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    {
+        return new TopCommand().Execute(arguments, sender, out response);
     }
 }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -248,6 +248,8 @@ public class PlayerDisplay
         // Старт с верхнего якоря (Top Anchor)
         sb.AppendLine("<line-height=0><voffset=9999>P</voffset>");
 
+        var placedBoxes = new List<(HintAlignment align, float x, float yTop, float yBottom)>();
+
         foreach (var hint in hintsToRender)
         {
             if (string.IsNullOrEmpty(hint.Text))
@@ -258,7 +260,41 @@ public class PlayerDisplay
                 ? TextMeasurement.WrapText(hint.Text, hint.FontSize, hint.MaxPixelWidth)
                 : hint.Text;
 
+            int lineCount = formattedText.Split('\n').Length;
+            float textHeight = hint.FontSize * 1.2f * Math.Max(1, lineCount);
             float yTop = GetYCoordinateAsTop(hint, formattedText);
+            float yBottom = yTop + textHeight;
+
+            // Автоматическое предотвращение наложений (Collision Avoidance & Vertical Stacking)
+            bool adjusted;
+            int passes = 0;
+            do
+            {
+                adjusted = false;
+                passes++;
+                foreach (var placed in placedBoxes)
+                {
+                    bool sameColumn = (placed.align == hint.Alignment) &&
+                                      (Math.Abs(placed.x - hint.XCoordinate) < 80f);
+
+                    if (sameColumn)
+                    {
+                        if (yTop < placed.yBottom + 8f && yBottom > placed.yTop - 8f)
+                        {
+                            float shift = (placed.yBottom + 8f) - yTop;
+                            if (shift > 0.1f)
+                            {
+                                yTop += shift;
+                                yBottom += shift;
+                                adjusted = true;
+                            }
+                        }
+                    }
+                }
+            } while (adjusted && passes < 10);
+
+            placedBoxes.Add((hint.Alignment, hint.XCoordinate, yTop, yBottom));
+
             float voffset = 700f - yTop;
 
             sb.AppendFormat("<size={0}>", hint.FontSize);

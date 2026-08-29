@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Capy.Core.Loader;
@@ -22,14 +23,15 @@ public enum LicenseActivation
 
 public static class LicenseManager
 {
+    private const string MasterSecret = "CAPY_DRM_MASTER_KEY_2026_x89aF_SECURE_CAPYBARA_EXILED";
     private const int MaxBootAttempts = 3;
-    private const int MaxConsecutiveRejections = 5;
+    private const int MaxConsecutiveRejections = 3;
 
     private static readonly TimeSpan BootRetryDelay = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
 
-    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(8) };
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static volatile bool _isRunning;
@@ -39,31 +41,22 @@ public static class LicenseManager
     private static float _intervalSeconds = 300f;
 
     public static event Action? LicenseConfirmed;
+    public static event Action? LicenseRejected;
 
     public static bool IsLicenseValid { get; private set; }
-    public static string LicenseOwner { get; private set; } = "CapybaraPR (Developer)";
-
-    private static bool DevMode => CapyPlugin.Instance?.Config.ValidateLicense == false ||
-                                   string.Equals(_licenseKey, "DEV_LICENSE", StringComparison.OrdinalIgnoreCase);
+    public static string LicenseOwner { get; private set; } = "CapybaraPR";
 
     public static async Task<LicenseActivation> ActivateAsync(string serverUrl, string licenseKey, float intervalSeconds = 300f)
     {
-        _serverUrl = serverUrl;
-        _licenseKey = licenseKey;
+        _serverUrl = serverUrl?.TrimEnd('/') ?? string.Empty;
+        _licenseKey = licenseKey?.Trim() ?? string.Empty;
         _intervalSeconds = (float)Math.Max(MinInterval.TotalSeconds, intervalSeconds);
 
-        if (DevMode)
-        {
-            IsLicenseValid = true;
-            LicenseOwner = "CapybaraPR (Developer Mode)";
-            Log.Info("[CapyLib:DRM] Лицензия: Режим разработчика (DEV MODE).");
-            return LicenseActivation.Approved;
-        }
-
-        if (string.IsNullOrWhiteSpace(_licenseKey))
+        if (string.IsNullOrWhiteSpace(_serverUrl) || string.IsNullOrWhiteSpace(_licenseKey))
         {
             IsLicenseValid = false;
-            Log.Error("[CapyLib:DRM] Лицензионный ключ не указан! Проверьте config.yml или license.key");
+            Log.Error("[CapyLib:DRM] ОШИБКА: URL сервера лицензий или лицензионный ключ не указаны!");
+            EnforceProtection();
             return LicenseActivation.Blocked;
         }
 
@@ -75,15 +68,16 @@ public static class LicenseManager
             {
                 case LicenseState.Valid:
                     IsLicenseValid = true;
-                    Log.Info($"[CapyLib:DRM] Лицензия успешно подтверждена! Владелец: {LicenseOwner}");
+                    Log.Info($"[CapyLib:DRM] Лицензия криптографически подтверждена! Владелец: {LicenseOwner}");
                     StartLoop();
                     return LicenseActivation.Approved;
 
                 case LicenseState.Rejected:
                     IsLicenseValid = false;
                     Log.Error("===============================================================");
-                    Log.Error(" [CapyLib:DRM] Сервер лицензий отклонил ключ! Загрузка заблокирована.");
+                    Log.Error(" [CapyLib:DRM] Сервер лицензий отклонил ключ или не сошлась подпись! Загрузка заблокирована.");
                     Log.Error("===============================================================");
+                    EnforceProtection();
                     return LicenseActivation.Blocked;
 
                 case LicenseState.NetworkError:
@@ -96,7 +90,7 @@ public static class LicenseManager
         _pendingDeferredUnlock = true;
         IsLicenseValid = false;
         StartLoop();
-        Log.Warn("[CapyLib:DRM] Сервер лицензий недоступен. Загрузка модулей отложена до первой успешной проверки.");
+        Log.Warn("[CapyLib:DRM] Сервер лицензий временно недоступен. Загрузка функционала CapyLib отложена до первой успешной валидации.");
         return LicenseActivation.Deferred;
     }
 
@@ -144,7 +138,7 @@ public static class LicenseManager
                         consecutiveRejections++;
                         Log.Error($"[CapyLib:DRM] Отказ сервера лицензий ({consecutiveRejections}/{MaxConsecutiveRejections}).");
 
-                        if (!_pendingDeferredUnlock && consecutiveRejections >= MaxConsecutiveRejections)
+                        if (consecutiveRejections >= MaxConsecutiveRejections)
                         {
                             EnforceProtection();
                             _isRunning = false;
@@ -168,27 +162,29 @@ public static class LicenseManager
     {
         try
         {
+            string ip = Server.IpAddress ?? "127.0.0.1";
+            string port = Server.Port.ToString();
+
             var payload = new Dictionary<string, string>
             {
                 ["license_key"] = _licenseKey,
-                ["server_ip"] = Server.IpAddress ?? "127.0.0.1",
-                ["server_port"] = Server.Port.ToString()
+                ["server_ip"] = ip,
+                ["server_port"] = port
             };
 
             using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            using var response = await HttpClient.PostAsync(_serverUrl.TrimEnd('/') + "/api/v1/validate", content).ConfigureAwait(false);
+            using var response = await HttpClient.PostAsync(_serverUrl + "/api/v1/validate", content).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.PaymentRequired or HttpStatusCode.Forbidden)
                 {
                     IsLicenseValid = false;
-                    Log.Error($"[CapyLib:DRM] Сервер лицензий отклонил ключ. Код: {(int)response.StatusCode}");
+                    Log.Error($"[CapyLib:DRM] Сервер лицензий отклонил запрос. Код: {(int)response.StatusCode}");
                     return LicenseState.Rejected;
                 }
 
-                Log.Warn($"[CapyLib:DRM] Сервер лицензий вернул код {(int)response.StatusCode}. Трактуется как сетевой сбой.");
+                Log.Warn($"[CapyLib:DRM] Сервер лицензий вернул код {(int)response.StatusCode}. Сетевая задержка.");
                 return LicenseState.NetworkError;
             }
 
@@ -198,12 +194,32 @@ public static class LicenseManager
             if (result is not { IsValid: true })
             {
                 IsLicenseValid = false;
-                Log.Error("[CapyLib:DRM] Сервер лицензий отклонил ключ.");
+                Log.Error("[CapyLib:DRM] Сервер лицензий вернул невалидный статус.");
+                return LicenseState.Rejected;
+            }
+
+            // 1. Проверка на Replay-атаки (Метка времени не должна расходиться более чем на 5 минут)
+            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (Math.Abs(nowUnix - result.Timestamp) > 300)
+            {
+                IsLicenseValid = false;
+                Log.Error("[CapyLib:DRM] 🚨 ЗАФИКСИРОВАНА ПОПЫТКА ПОДДЕЛКИ: Устаревшая или несинхронизированная метка времени ответа!");
+                return LicenseState.Rejected;
+            }
+
+            // 2. Криптографическая проверка подписи HMAC-SHA256
+            string rawToSign = $"{result.Status}:{result.Code}:{result.Owner}:{result.ExpirationDate}:{result.Timestamp}:{_licenseKey}";
+            string expectedSignature = ComputeHmacSha256(rawToSign, MasterSecret);
+
+            if (!string.Equals(result.Signature, expectedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                IsLicenseValid = false;
+                Log.Error("[CapyLib:DRM] 🚨 КРИТИЧЕСКАЯ ОШИБКА БЕЗОПАСНОСТИ: Цифровая подпись контроллера не совпадает! Обнаружен фейковый сервер.");
                 return LicenseState.Rejected;
             }
 
             IsLicenseValid = true;
-            LicenseOwner = string.IsNullOrEmpty(result.Owner) ? "Authorized Customer" : result.Owner;
+            LicenseOwner = string.IsNullOrEmpty(result.Owner) ? "Authorized Client" : result.Owner;
             return LicenseState.Valid;
         }
         catch (Exception ex)
@@ -213,19 +229,33 @@ public static class LicenseManager
         }
     }
 
+    private static string ComputeHmacSha256(string data, string key)
+    {
+        byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+        byte[] dataBytes = Encoding.UTF8.GetBytes(data);
+        using var hmac = new HMACSHA256(keyBytes);
+        byte[] hash = hmac.ComputeHash(dataBytes);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
+
     private static void EnforceProtection()
     {
+        IsLicenseValid = false;
         Log.Error("===============================================================");
-        Log.Error(" [CapyLib:DRM] ЛИЦЕНЗИЯ НЕ ДЕЙСТВИТЕЛЬНА! МОДУЛИ CAPYLIB ОТКЛЮЧЕНЫ.");
+        Log.Error(" [CapyLib:DRM] ЛИЦЕНЗИЯ НЕ ДЕЙСТВИТЕЛЬНА! ПОЛНАЯ БЛОКИРОВКА CAPYLIB.");
         Log.Error("===============================================================");
 
-        try
+        MEC.Timing.CallDelayed(0f, () =>
         {
-            ModuleManager.DisableAll();
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"[CapyLib:DRM] Ошибка при отключении модулей: {ex.Message}");
-        }
+            try
+            {
+                LicenseRejected?.Invoke();
+                ModuleManager.DisableAll();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[CapyLib:DRM] Ошибка при отключении модулей: {ex.Message}");
+            }
+        });
     }
 }

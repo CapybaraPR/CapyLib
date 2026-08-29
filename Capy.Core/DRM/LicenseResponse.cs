@@ -1,7 +1,7 @@
 namespace Capy.Core.DRM;
 
 /// <summary>
-/// DTO модель ответа от сервера валидации лицензий.
+/// DTO модель криптографически подписанного ответа от DRM-контроллера.
 /// </summary>
 public class LicenseResponse
 {
@@ -10,8 +10,10 @@ public class LicenseResponse
     public string Owner { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string ExpirationDate { get; set; } = string.Empty;
+    public long Timestamp { get; set; }
+    public string Signature { get; set; } = string.Empty;
 
-    public bool IsValid => string.Equals(Status, "valid", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(Status, "success", StringComparison.OrdinalIgnoreCase) ||
-                           Code == 200;
+    public bool IsValid => (string.Equals(Status, "valid", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(Status, "success", StringComparison.OrdinalIgnoreCase) ||
+                            Code == 200) && !string.IsNullOrEmpty(Signature);
 }

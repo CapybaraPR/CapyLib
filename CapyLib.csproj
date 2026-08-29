@@ -154,6 +154,15 @@
         <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.2" />
         <PackageReference Include="System.Text.Json" Version="9.0.2" />
         <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+        <PackageReference Include="Obfuscar" Version="2.2.40" PrivateAssets="all" />
     </ItemGroup>
+
+    <!-- Автоматическая максимальная обфускация при Release сборке -->
+    <Target Name="ObfuscateRelease" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+        <Message Importance="high" Text="[CapyLib:DRM] Запуск максимальной обфускации сборки CapyLib.dll..." />
+        <Exec Command="&quot;$(Obfuscar)&quot; obfuscar.xml" WorkingDirectory="$(ProjectDir)" />
+        <Copy SourceFiles="$(TargetDir)Obfuscated\CapyLib.dll" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true" />
+        <Message Importance="high" Text="[CapyLib:DRM] Обфускация успешно завершена! CapyLib.dll защищен." />
+    </Target>
 
 </Project>

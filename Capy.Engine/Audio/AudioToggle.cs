@@ -8,7 +8,7 @@ namespace Capy.Engine.Audio;
 /// </summary>
 public static class AudioToggle
 {
-    public static void CreateGlobal(string clipName, float volume = 1f)
+    public static void CreateGlobal(string clipName, float volume = 1f, bool loop = false)
     {
         if (!ValidateClip(ref clipName)) return;
 
@@ -17,10 +17,10 @@ public static class AudioToggle
             p.AddSpeaker("Main", isSpatial: false, maxDistance: 5000f, volume: volume);
         });
 
-        audioPlayer.AddClip(clipName, destroyOnEnd: false);
+        audioPlayer.AddClip(clipName, destroyOnEnd: false, loop: loop);
     }
 
-    public static void CreateForPlayer(Player player, string clipName, float min = 0f, float max = 15f, float volume = 1f)
+    public static void CreateForPlayer(Player player, string clipName, float min = 0f, float max = 15f, float volume = 1f, bool loop = false)
     {
         if (player == null || !ValidateClip(ref clipName)) return;
 
@@ -33,10 +33,10 @@ public static class AudioToggle
             speaker.transform.localPosition = Vector3.zero;
         });
 
-        audioPlayer.AddClip(clipName, destroyOnEnd: false);
+        audioPlayer.AddClip(clipName, destroyOnEnd: false, loop: loop);
     }
 
-    public static void CreateForGameObject(GameObject gameObject, string clipName, float min = 5f, float max = 20f, float volume = 1f)
+    public static void CreateForGameObject(GameObject gameObject, string clipName, float min = 5f, float max = 20f, float volume = 1f, bool loop = false)
     {
         if (gameObject == null || !ValidateClip(ref clipName)) return;
 
@@ -49,16 +49,16 @@ public static class AudioToggle
             speaker.transform.localPosition = Vector3.zero;
         });
 
-        audioPlayer.AddClip(clipName, destroyOnEnd: false);
+        audioPlayer.AddClip(clipName, destroyOnEnd: false, loop: loop);
     }
 
-    public static void CreateForSchematic(SchematicObject schematic, string clipName, float min = 5f, float max = 20f, float volume = 1f)
+    public static void CreateForSchematic(SchematicObject schematic, string clipName, float min = 5f, float max = 20f, float volume = 1f, bool loop = false)
     {
         if (schematic == null || schematic.gameObject == null) return;
-        CreateForGameObject(schematic.gameObject, clipName, min, max, volume);
+        CreateForGameObject(schematic.gameObject, clipName, min, max, volume, loop);
     }
 
-    public static void CreateForRoom(Room room, string clipName, float min = 5f, float max = 20f, float volume = 1f)
+    public static void CreateForRoom(Room room, string clipName, float min = 5f, float max = 20f, float volume = 1f, bool loop = true)
     {
         if (room == null || !ValidateClip(ref clipName)) return;
 
@@ -69,7 +69,7 @@ public static class AudioToggle
             speaker.transform.position = room.Position;
         });
 
-        audioPlayer.AddClip(clipName, destroyOnEnd: false);
+        audioPlayer.AddClip(clipName, destroyOnEnd: false, loop: loop);
     }
 
     public static void DestroyGlobal(string? clipName = null) => SimpleDestroy("CapyGlobalAudio", clipName);

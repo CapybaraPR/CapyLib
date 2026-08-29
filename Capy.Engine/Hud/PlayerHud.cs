@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Capy.Engine.Hud.Panels;
 using Exiled.API.Features;
@@ -22,8 +22,7 @@ public class PlayerHud
             new RoundTimePanel(player),
             new WarheadStatusPanel(player),
             new GeneratorStatusPanel(player),
-            new RespawnMtfTimerPanel(player),
-            new RespawnChaosTimerPanel(player),
+            new RespawnTimerPanel(player),
             new SpectatorListPanel(player),
             new SpectatorBottomPanel(player),
             new ItemHudPanel(player)

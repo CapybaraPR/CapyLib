@@ -171,7 +171,11 @@ public sealed class SchematicObject
             try
             {
                 if (door?.Base != null)
+                {
+                    if (Mirror.NetworkServer.active)
+                        Mirror.NetworkServer.UnSpawn(door.Base.gameObject);
                     UnityEngine.Object.Destroy(door.Base.gameObject);
+                }
             }
             catch { }
         }
@@ -181,7 +185,11 @@ public sealed class SchematicObject
             try
             {
                 if (go != null)
+                {
+                    if (Mirror.NetworkServer.active)
+                        Mirror.NetworkServer.UnSpawn(go);
                     UnityEngine.Object.Destroy(go);
+                }
             }
             catch { }
         }

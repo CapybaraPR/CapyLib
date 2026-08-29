@@ -14,24 +14,17 @@ public class CapyConfig : IConfig
     [Description("Режим подробного логирования (Debug)")]
     public bool Debug { get; set; } = false;
 
-    [Description("Включить обязательную проверку DRM лицензии")]
-    public bool ValidateLicense { get; set; } = false;
-
-    [Description("URL сервера валидации лицензий (DRM)")]
-    public string LicenseServerUrl { get; set; } = "http://127.0.0.1:5000";
+    [Description("URL сервера валидации лицензий (DRM контроллер)")]
+    public string LicenseServerUrl { get; set; } = "http://127.0.0.1:8090";
 
     [Description("Лицензионный ключ сервера (если пусто - читается из license.key)")]
-    public string LicenseKey { get; set; } = "DEV_LICENSE";
+    public string LicenseKey { get; set; } = "";
 
     [Description("Интервал проверки лицензии в секундах")]
     public float LicenseCheckIntervalSeconds { get; set; } = 300f;
 
-    [Description("Список SteamID разработчиков с доступом к админ-командам управления модулями")]
-    public List<string> AuthorizedSteamIds { get; set; } = new()
-    {
-        "76561198708583029@steam",
-        "76561198708583029"
-    };
+    [Description("Список SteamID разработчиков с доступом к админ-командам управления модулями (пример: 76561198000000000@steam)")]
+    public List<string> AuthorizedSteamIds { get; set; } = new();
 
     [Description("Тип базы данных: 'LiteDB' или 'MongoDB'")]
     public string DatabaseType { get; set; } = "LiteDB";

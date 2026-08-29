@@ -16,8 +16,8 @@ namespace Capy.Engine.Hints.Extensions;
 /// </summary>
 public static class ShowHintExtensions
 {
-    private static readonly ConcurrentDictionary<int, Dictionary<string, Hint>> TaggedHints = new();
-    private static readonly ConcurrentDictionary<int, Dictionary<string, CoroutineHandle>> ExpiryHandles = new();
+    private static readonly ConcurrentDictionary<int, ConcurrentDictionary<string, Hint>> TaggedHints = new();
+    private static readonly ConcurrentDictionary<int, ConcurrentDictionary<string, CoroutineHandle>> ExpiryHandles = new();
 
     /// <summary>
     /// Вывести подсказку в заданную зону экрана с точным расчетом экранных координат.
@@ -28,6 +28,33 @@ public static class ShowHintExtensions
 
         var display = PlayerDisplay.Get(player);
         KillExpiry(player.Id, tag);
+
+        var dict = TaggedHints.GetOrAdd(player.Id, _ => new ConcurrentDictionary<string, Hint>());
+
+        // Если подсказка с таким тегом уже существует — обновляем её на месте без мерцания (In-Place Update)
+        if (dict.TryGetValue(tag, out var existingHint) && existingHint != null)
+        {
+            var (xCoord, yCoord, alignment, vAlignment) = GetZoneCoordinates(zone);
+            existingHint.FontSize = fontSize;
+            existingHint.XCoordinate = xCoord;
+            existingHint.YCoordinate = yCoord;
+            existingHint.Alignment = alignment;
+            existingHint.YCoordinateAlign = vAlignment;
+            existingHint.Text = message;
+
+            if (duration > 0f && duration < 3600f)
+            {
+                CoroutineHandle handle = Timing.CallDelayed(duration, () =>
+                {
+                    RemoveTaggedHint(player.Id, tag, existingHint);
+                    display.RemoveHint(existingHint);
+                });
+
+                StoreExpiry(player.Id, tag, handle);
+            }
+            return;
+        }
+
         player.ClearCapyHint(tag);
 
         var (x, y, align, vAlign) = GetZoneCoordinates(zone);
@@ -46,7 +73,6 @@ public static class ShowHintExtensions
             SyncSpeed = HintSyncSpeed.Fast
         };
 
-        var dict = TaggedHints.GetOrAdd(player.Id, _ => new Dictionary<string, Hint>());
         dict[tag] = hint;
 
         display.AddHint(hint);
@@ -103,9 +129,8 @@ public static class ShowHintExtensions
 
         if (TaggedHints.TryGetValue(player.Id, out var dict))
         {
-            if (dict.TryGetValue(tag, out var hint))
+            if (dict.TryRemove(tag, out var hint))
             {
-                dict.Remove(tag);
                 PlayerDisplay.Get(player).RemoveHint(hint);
             }
         }
@@ -153,7 +178,7 @@ public static class ShowHintExtensions
 
     private static void StoreExpiry(int playerId, string tag, CoroutineHandle handle)
     {
-        var dict = ExpiryHandles.GetOrAdd(playerId, _ => new Dictionary<string, CoroutineHandle>());
+        var dict = ExpiryHandles.GetOrAdd(playerId, _ => new ConcurrentDictionary<string, CoroutineHandle>());
         dict[tag] = handle;
     }
 
@@ -161,10 +186,9 @@ public static class ShowHintExtensions
     {
         if (ExpiryHandles.TryGetValue(playerId, out var dict))
         {
-            if (dict.TryGetValue(tag, out var handle))
+            if (dict.TryRemove(tag, out var handle))
             {
                 Timing.KillCoroutines(handle);
-                dict.Remove(tag);
             }
         }
     }
@@ -175,7 +199,7 @@ public static class ShowHintExtensions
         {
             if (dict.TryGetValue(tag, out var existing) && existing == hint)
             {
-                dict.Remove(tag);
+                dict.TryRemove(tag, out _);
             }
         }
     }

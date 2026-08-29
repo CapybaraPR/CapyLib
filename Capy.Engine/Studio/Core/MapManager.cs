@@ -18,6 +18,7 @@ public static class MapManager
 {
     public static string MapsDirectoryPath { get; private set; } = string.Empty;
     private static readonly List<SchematicObject> ActiveMapObjects = new();
+    private static readonly object _mapLock = new();
 
     public static void Initialize()
     {
@@ -103,7 +104,8 @@ public static class MapManager
 
                     if (spawned != null)
                     {
-                        ActiveMapObjects.Add(spawned);
+                        lock (_mapLock)
+                            ActiveMapObjects.Add(spawned);
                         spawnedCount++;
                     }
                 }
@@ -120,7 +122,8 @@ public static class MapManager
                 var spawnedGlobal = SchematicLoader.Spawn(globalSchem, mapName + "_Global", Vector3.zero, Quaternion.identity, Vector3.one);
                 if (spawnedGlobal != null)
                 {
-                    ActiveMapObjects.Add(spawnedGlobal);
+                    lock (_mapLock)
+                        ActiveMapObjects.Add(spawnedGlobal);
                     spawnedCount++;
                 }
             }
@@ -140,13 +143,19 @@ public static class MapManager
     /// </summary>
     public static int ClearCurrentMap()
     {
-        int count = ActiveMapObjects.Count;
-        foreach (var obj in ActiveMapObjects)
+        SchematicObject[] snapshot;
+        lock (_mapLock)
+        {
+            snapshot = ActiveMapObjects.ToArray();
+            ActiveMapObjects.Clear();
+        }
+
+        foreach (var obj in snapshot)
         {
             try { SchematicLoader.RemoveInstance(obj); } catch { }
         }
-        ActiveMapObjects.Clear();
-        return count;
+
+        return snapshot.Length;
     }
 
     /// <summary>
@@ -158,6 +167,9 @@ public static class MapManager
         if (destroyed == null) return;
 
         var set = new HashSet<SchematicObject>(destroyed);
-        ActiveMapObjects.RemoveAll(o => set.Contains(o));
+        lock (_mapLock)
+        {
+            ActiveMapObjects.RemoveAll(o => set.Contains(o));
+        }
     }
 }

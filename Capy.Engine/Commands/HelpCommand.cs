@@ -41,7 +41,7 @@ public static class HelpMessageBuilder
         }
 
         sb.AppendLine("  <color=#ffd285>* .linkdiscord <код></color>     <color=#c2c2c2>-- Привязать Discord к аккаунту (/steamsl)</color>");
-        sb.AppendLine("  <color=#ffd285>* .help</color>                  <color=#c2c2c2>-- Показать эту справку</color>");
+        sb.AppendLine("  <color=#ffd285>* .help (или .menu, .cmds)</color> <color=#c2c2c2>-- Показать это меню и справку</color>");
         sb.AppendLine();
 
         sb.AppendLine("<color=#a3e635>>> ТЕГИ И ОТОБРАЖЕНИЕ:</color>");
@@ -53,8 +53,9 @@ public static class HelpMessageBuilder
         if (isStaff)
         {
             sb.AppendLine("<color=#f87171>>> ДЛЯ АДМИНИСТРАЦИИ (STAFF):</color>");
-            sb.AppendLine("  <color=#ffd285>* .capy staff</color>            <color=#c2c2c2>-- Проверить свои часы за неделю и норму</color>");
-            sb.AppendLine("  <color=#ffd285>* .overwatch (или .ow)</color>   <color=#c2c2c2>-- Включить/выключить режим наблюдения</color>");
+            sb.AppendLine("  <color=#ffd285>* capy staff [ник/steamid]</color> <color=#c2c2c2>-- [RA] Проверить норму часов и профиль сотрудника</color>");
+            sb.AppendLine("  <color=#ffd285>* .staff</color>                  <color=#c2c2c2>-- [~] Проверить свои часы в консоли игрока</color>");
+            sb.AppendLine("  <color=#ffd285>* .overwatch (или .ow)</color>   <color=#c2c2c2>-- [~] Включить/выключить режим наблюдения</color>");
             sb.AppendLine();
         }
 
@@ -69,8 +70,8 @@ public static class HelpMessageBuilder
 [CommandHandler(typeof(ClientCommandHandler))]
 public sealed class HelpCommand : ICommand
 {
-    public string Command { get; } = "help";
-    public string[] Aliases { get; } = { "cmds", "menu" };
+    public string Command { get; } = "menu";
+    public string[] Aliases { get; } = { "cmds", "cmd", "commands", "helpme", "хелп", "меню" };
     public string Description { get; } = "Список доступных команд сервера.";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)

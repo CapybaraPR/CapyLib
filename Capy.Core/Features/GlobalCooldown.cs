@@ -77,10 +77,13 @@ public class GlobalCooldown : IDisposable
 
     internal static int RemoveAllOwnedBy(object owner)
     {
+        if (owner == null) return 0;
         lock (Cooldowns)
         {
             var victims = Cooldowns
-                .Where(x => ReferenceEquals(x.Owner, owner) || (x.Owner as string) == (owner as string))
+                .Where(x => ReferenceEquals(x.Owner, owner) ||
+                            Equals(x.Owner, owner) ||
+                            (x.Owner is string s1 && owner is string s2 && string.Equals(s1, s2, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
             foreach (var victim in victims)

@@ -25,6 +25,7 @@ public static class SchematicLoader
 {
     private static readonly ConcurrentDictionary<string, (SchematicData Data, DateTime LastModified)> CachedSchematics = new(StringComparer.OrdinalIgnoreCase);
     private static readonly List<SchematicObject> ActiveInstances = new();
+    private static readonly object _availableCacheLock = new();
 
     private static List<string>? _availableListCache;
     private static DateTime _availableListCacheTime = DateTime.MinValue;
@@ -55,7 +56,8 @@ public static class SchematicLoader
 
     internal static void InvalidateAvailableListCache()
     {
-        _availableListCache = null;
+        lock (_availableCacheLock)
+            _availableListCache = null;
     }
 
     public static IReadOnlyList<SchematicObject> SpawnedSchematics
@@ -92,8 +94,11 @@ public static class SchematicLoader
 
     public static List<string> GetAvailableSchematics()
     {
-        if (_availableListCache != null && (DateTime.UtcNow - _availableListCacheTime).TotalSeconds < AvailableListCacheSeconds)
-            return new List<string>(_availableListCache);
+        lock (_availableCacheLock)
+        {
+            if (_availableListCache != null && (DateTime.UtcNow - _availableListCacheTime).TotalSeconds < AvailableListCacheSeconds)
+                return new List<string>(_availableListCache);
+        }
 
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -117,10 +122,17 @@ public static class SchematicLoader
 
         ScanDir(PrimarySchematicsPath);
         ScanDir(FallbackSchematicsPath);
+        ScanDir(Path.Combine(Paths.Plugins, "CapyLib", "Schematics"));
+        ScanDir(Path.Combine(Paths.Configs, "CapyLib.NoRules", "Schematics"));
+        ScanDir(Path.Combine(Paths.Plugins, "CapyLib.NoRules", "Schematics"));
 
-        _availableListCache = new List<string>(result);
-        _availableListCacheTime = DateTime.UtcNow;
-        return new List<string>(result);
+        var list = new List<string>(result);
+        lock (_availableCacheLock)
+        {
+            _availableListCache = list;
+            _availableListCacheTime = DateTime.UtcNow;
+        }
+        return new List<string>(list);
     }
 
     public static string? FindSchematicFile(string schematicName)
@@ -129,7 +141,13 @@ public static class SchematicLoader
         if (string.IsNullOrWhiteSpace(schematicName))
             return null;
 
-        string[] searchDirs = { PrimarySchematicsPath, FallbackSchematicsPath };
+        string[] searchDirs = {
+            PrimarySchematicsPath,
+            FallbackSchematicsPath,
+            Path.Combine(Paths.Plugins, "CapyLib", "Schematics"),
+            Path.Combine(Paths.Configs, "CapyLib.NoRules", "Schematics"),
+            Path.Combine(Paths.Plugins, "CapyLib.NoRules", "Schematics")
+        };
 
         foreach (var dir in searchDirs)
         {

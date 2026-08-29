@@ -57,6 +57,9 @@ public static class PrefabManager
 
         try
         {
+            if (NetworkClient.prefabs == null || NetworkClient.prefabs.Count == 0)
+                return;
+
             int foundCount = 0;
 
             foreach (GameObject gameObject in NetworkClient.prefabs.Values)
@@ -154,22 +157,45 @@ public static class PrefabManager
                 }
             }
 
-            // Префабы регистрируются в Mirror уже после старта плагина: если при инициализации
-            // ничего не нашлось — НЕ ставим флаг навсегда, чтобы повторить попытку при следующем Spawn.
             if (foundCount > 0)
             {
                 IsInitialized = true;
                 Exiled.API.Features.Log.Debug($"[CapyStudio Prefabs] Инициализировано префабов: {foundCount}");
-            }
-            else if ((DateTime.UtcNow - _lastInitWarnTime).TotalSeconds > 60)
-            {
-                _lastInitWarnTime = DateTime.UtcNow;
-                Exiled.API.Features.Log.Warn("[CapyStudio Prefabs] Сетевые префабы ещё не зарегистрированы (NetworkClient.prefabs пуст). Повторная попытка будет выполнена при следующем спавне.");
             }
         }
         catch (Exception ex)
         {
             Exiled.API.Features.Log.Error($"[CapyStudio Prefabs] Ошибка инициализации сетевых префабов: {ex}");
         }
+    }
+
+    /// <summary>
+    /// Сбрасывает все кэшированные ссылки на префабы (вызывается при выгрузке CapyStudio).
+    /// </summary>
+    public static void Reset()
+    {
+        IsInitialized = false;
+        PrimitivePrefab = null;
+        LightPrefab = null;
+        CapybaraPrefab = null;
+        TextPrefab = null;
+        InteractablePrefab = null;
+        WorkstationPrefab = null;
+        DoorLcz = null;
+        DoorHcz = null;
+        DoorEz = null;
+        DoorHeavyBulk = null;
+        DoorGate = null;
+        TargetSport = null;
+        TargetDBoy = null;
+        TargetBinary = null;
+        CameraLcz = null;
+        CameraHcz = null;
+        Pedestal500 = null;
+        Pedestal207 = null;
+        Pedestal018 = null;
+        LockerLargeGun = null;
+        LockerMedkit = null;
+        LockerRifleRack = null;
     }
 }

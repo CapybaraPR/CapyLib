@@ -47,9 +47,9 @@ public sealed class BridgeApiServer : IDisposable
     private readonly DateTime _startTimeUtc = DateTime.UtcNow;
     private Task? _acceptLoop;
     private CoroutineHandle _statusRefreshHandle;
-    private StatusResponse? _lastStatus;
-    private PlayersResponse? _lastPlayers;
-    private GroupsResponse? _lastGroups;
+    private volatile StatusResponse? _lastStatus;
+    private volatile PlayersResponse? _lastPlayers;
+    private volatile GroupsResponse? _lastGroups;
     private int _stopped;
 
     public BridgeApiServer(

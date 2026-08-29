@@ -1,0 +1,33 @@
+<?xml version='1.0'?>
+<Obfuscator>
+  <Var name="InPath" value=".\bin\Release\net48" />
+  <Var name="OutPath" value=".\bin\Release\net48\Obfuscated" />
+  <Var name="KeepPublicApi" value="true" />
+  <Var name="HideStrings" value="true" />
+  <Var name="RenameFields" value="true" />
+  <Var name="RenameProperties" value="true" />
+  <Var name="RenameEvents" value="true" />
+  <Var name="RenameMethods" value="true" />
+  <Var name="RenameParameters" value="true" />
+  <Var name="OptimizeMethods" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+
+  <!-- Главная сборка плагина для защиты -->
+  <Module file="$(InPath)\CapyLib.dll">
+    <!-- Сохраняем публичный API фреймворка для подключаемых плагинов (NoRules) и точку входа EXILED -->
+    <SkipType name="Capy.CapyPlugin" />
+    <SkipType name="Capy.CapyConfig" />
+    <SkipNamespace name="Capy.Engine*" />
+    <SkipNamespace name="Capy.Core.API*" />
+    <SkipNamespace name="Capy.Core.Database*" />
+    <SkipNamespace name="Capy.Core.Services*" />
+    <SkipNamespace name="Capy.Core.Extensions*" />
+    <SkipNamespace name="Capy.Core.Enums*" />
+    <SkipNamespace name="Capy.Core.Features*" />
+    
+    <!-- ВСЁ ОСТАЛЬНОЕ (DRM, LicenseManager, LicenseResponse, DiscordBridge, HMAC, Внутренние алгоритмы) ОБФУСЦИРУЕТСЯ И ШИФРУЕТСЯ -->
+  </Module>
+
+  <!-- Пути к библиотекам зависимостей -->
+  <AssemblySearchPath path=".\_deps" />
+</Obfuscator>
