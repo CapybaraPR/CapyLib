@@ -19,7 +19,7 @@ public static class ServerBanner
         var random = new Random();
         string randomHint = Hints[random.Next(Hints.Length)];
 
-        Log.Info("This server is powered by: \n" +
+        Log.Debug("This server is powered by: \n" +
         @" ╔════╗  ╔════╗ ╔════╗ ╔╗  ╔╗ ╔╗    ╔╗ ╔════╗ " + "\n" +
         @" ║╔═══╝  ║╔══╗║ ║╔══╗║ ║║  ║║ ║║    ╠╣ ║╔══╗║ " + "\n" +
         @" ║║      ║╚══╝║ ║╚══╝║ ║╚══╝║ ║║    ║║ ║╚══╝║ " + "\n" +

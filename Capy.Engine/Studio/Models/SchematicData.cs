@@ -179,6 +179,29 @@ public sealed class BlockData
         return 1.0f;
     }
 
+    public Vector2 GetDisplaySize()
+    {
+        if (Properties.TryGetValue("DisplaySize", out var val) && val != null)
+        {
+            if (val is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Object)
+                {
+                    float x = je.TryGetProperty("x", out var px) && px.TryGetSingle(out float fx) ? fx : (je.TryGetProperty("X", out var px2) && px2.TryGetSingle(out float fx2) ? fx2 : 200f);
+                    float y = je.TryGetProperty("y", out var py) && py.TryGetSingle(out float fy) ? fy : (je.TryGetProperty("Y", out var py2) && py2.TryGetSingle(out float fy2) ? fy2 : 50f);
+                    return new Vector2(x, y);
+                }
+            }
+            if (val is Dictionary<string, object> dict)
+            {
+                float x = dict.TryGetValue("x", out var dx) && float.TryParse(dx?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float fx) ? fx : 200f;
+                float y = dict.TryGetValue("y", out var dy) && float.TryParse(dy?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float fy) ? fy : 50f;
+                return new Vector2(x, y);
+            }
+        }
+        return new Vector2(200f, 50f);
+    }
+
     public float GetTeleportCooldown()
     {
         if (Properties.TryGetValue("Cooldown", out var val) && float.TryParse(val?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))

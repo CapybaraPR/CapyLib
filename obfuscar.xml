@@ -24,8 +24,12 @@
     <SkipNamespace name="Capy.Core.Extensions*" />
     <SkipNamespace name="Capy.Core.Enums*" />
     <SkipNamespace name="Capy.Core.Features*" />
+    <SkipNamespace name="Capy.Core.Loader*" />
+    <SkipNamespace name="Capy.Core.Subsystems*" />
+    <SkipNamespace name="Capy.API*" />
+    <SkipNamespace name="Capy.Commands*" />
     
-    <!-- ВСЁ ОСТАЛЬНОЕ (DRM, LicenseManager, LicenseResponse, DiscordBridge, HMAC, Внутренние алгоритмы) ОБФУСЦИРУЕТСЯ И ШИФРУЕТСЯ -->
+    <!-- ВСЁ ОСТАЛЬНОЕ (DRM, LicenseManager, LicenseResponse, HMAC, Секретные алгоритмы защиты) ОБФУСЦИРУЕТСЯ И ШИФРУЕТСЯ -->
   </Module>
 
   <!-- Пути к библиотекам зависимостей -->

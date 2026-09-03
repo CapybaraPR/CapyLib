@@ -35,7 +35,7 @@ public static class PlaceholderReplacer
         RegisterPlaceholder("server_max_players", _ => Server.PlayerCount.ToString());
         RegisterPlaceholder("server_tps", _ => Server.Tps.ToString("0.0"));
 
-        RegisterPlaceholder("round_time", _ => Round.ElapsedTime.ToString(@"mm\:ss"));
+        RegisterPlaceholder("round_time", _ => Round.ElapsedTime.TotalHours >= 1.0 ? Round.ElapsedTime.ToString(@"hh\:mm\:ss") : Round.ElapsedTime.ToString(@"mm\:ss"));
         RegisterPlaceholder("round_status", _ => Round.IsStarted ? "Active" : "Waiting");
         RegisterPlaceholder("warhead_status", _ => Warhead.Status.ToString());
     }

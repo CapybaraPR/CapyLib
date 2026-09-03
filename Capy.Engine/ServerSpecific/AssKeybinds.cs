@@ -98,7 +98,7 @@ public static class AssKeybinds
             ServerSpecificSettingsSync.ServerOnSettingValueReceived -= OnServerSettingValueReceived;
             ServerSpecificSettingsSync.ServerOnSettingValueReceived += OnServerSettingValueReceived;
 
-            Log.Info($"[AssKeybinds] Зарегистрировано {RegisteredKeybinds.Count} серверных клавиш в ServerSpecificSettings!");
+            Log.Debug($"[AssKeybinds] Зарегистрировано {RegisteredKeybinds.Count} серверных клавиш в ServerSpecificSettings!");
         }
         catch (Exception ex)
         {

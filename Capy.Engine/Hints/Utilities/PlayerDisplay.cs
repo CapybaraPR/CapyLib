@@ -58,6 +58,9 @@ public class PlayerDisplay
         {
             if (Displays.TryGetValue(player, out var display))
             {
+                if (display._batchCoroutine.IsRunning)
+                    Timing.KillCoroutines(display._batchCoroutine);
+
                 display.ClearHint();
                 Displays.Remove(player);
             }

@@ -51,7 +51,7 @@ public sealed class DiscordBridgeModule : BaseModule<DiscordBridgeConfig>
             _apiServer = new BridgeApiServer(Config, _eventStore, _eventLogger, _linkService, _roleController, _staffService, _auth);
             _apiServer.Start();
 
-            Log.Info("Модуль интеграции DiscordBridge успешно запущен.");
+            Log.Debug("Модуль интеграции DiscordBridge успешно запущен.");
         }
         catch (Exception ex)
         {

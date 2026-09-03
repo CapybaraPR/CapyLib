@@ -24,14 +24,14 @@ public enum LicenseActivation
 public static class LicenseManager
 {
     private const string MasterSecret = "CAPY_DRM_MASTER_KEY_2026_x89aF_SECURE_CAPYBARA_EXILED";
-    private const int MaxBootAttempts = 3;
+    private const int MaxBootAttempts = 1;
     private const int MaxConsecutiveRejections = 3;
 
-    private static readonly TimeSpan BootRetryDelay = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan BootRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
 
-    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(2.5) };
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static volatile bool _isRunning;
@@ -68,7 +68,7 @@ public static class LicenseManager
             {
                 case LicenseState.Valid:
                     IsLicenseValid = true;
-                    Log.Info($"[CapyLib:DRM] Лицензия криптографически подтверждена! Владелец: {LicenseOwner}");
+                    Log.Info($"[DRM] Лицензия подтверждена (Владелец: {LicenseOwner})");
                     StartLoop();
                     return LicenseActivation.Approved;
 
@@ -109,7 +109,7 @@ public static class LicenseManager
 
         Task.Run(async () =>
         {
-            float backoff = _intervalSeconds;
+            float backoff = _pendingDeferredUnlock ? 10f : _intervalSeconds;
 
             while (_isRunning)
             {
@@ -129,7 +129,7 @@ public static class LicenseManager
                         {
                             _pendingDeferredUnlock = false;
                             IsLicenseValid = true;
-                            Log.Info($"[CapyLib:DRM] Лицензия успешно подтверждена! Владелец: {LicenseOwner}");
+                            Log.Info($"[DRM] Лицензия подтверждена (Владелец: {LicenseOwner})");
                             NotifyOnMainThread();
                         }
                         break;

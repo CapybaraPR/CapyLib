@@ -85,7 +85,7 @@ public sealed class BridgeAuth : IDisposable
             }
             else if (_config.RequireSshSignature)
             {
-                Log.Warn("[DiscordBridge.BridgeAuth] require_ssh_signature=true, но публичный SSH ключ не найден.");
+                Log.Debug("[DiscordBridge.BridgeAuth] require_ssh_signature=true, но публичный SSH ключ не найден.");
             }
         }
     }

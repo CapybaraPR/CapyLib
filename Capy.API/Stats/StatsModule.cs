@@ -23,7 +23,7 @@ public class StatsModule : BaseModule<StatsConfig>
         Exiled.Events.Handlers.Player.Left += _handlers.OnLeft;
         Exiled.Events.Handlers.Server.RoundEnded += _handlers.OnRoundEnded;
 
-        Log.Info("Модуль сбора статистики успешно активирован.");
+        Log.Debug("Модуль сбора статистики успешно активирован.");
     }
 
     public override void OnDisabled()
@@ -39,6 +39,6 @@ public class StatsModule : BaseModule<StatsConfig>
             _handlers = null;
         }
 
-        Log.Info("Модуль сбора статистики отключен.");
+        Log.Debug("Модуль сбора статистики отключен.");
     }
 }

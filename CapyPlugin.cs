@@ -1,16 +1,17 @@
+using System;
+using System.IO;
+using Exiled.API.Features;
 using Capy.Core.Database;
 using Capy.Core.DRM;
 using Capy.Core.Loader;
 using Capy.Core.Services;
+using Capy.Core.Subsystems;
 using Capy.Engine;
-using Capy.Engine.Audio;
-using Capy.Engine.CustomItems.Manager;
-using Capy.Engine.CustomRoles.Manager;
 
 namespace Capy;
 
 /// <summary>
-/// Главный плагин и точка входа библиотеки CapyLib в среду EXILED с защитой DRM.
+/// Главный плагин и точка входа библиотеки CapyLib в среду EXILED с защитой DRM и рефлексивной архитектурой подсистем.
 /// </summary>
 public sealed class CapyPlugin : Plugin<CapyConfig>
 {
@@ -21,9 +22,8 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
 
     public static CapyPlugin Instance { get; private set; } = null!;
 
-    public ModuleLoader Loader { get; private set; } = null!;
-    public IDatabaseProvider Database { get; private set; } = null!;
-    private HarmonyLib.Harmony? _harmony;
+    public ModuleLoader Loader => SubsystemRegistry.GetSubsystem<ModuleLoaderSubsystem>()?.Loader ?? null!;
+    public IDatabaseProvider Database => SubsystemRegistry.GetSubsystem<DatabaseSubsystem>()?.Database ?? null!;
     private bool _isInitialized;
 
     public override void OnEnabled()
@@ -86,32 +86,9 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
             return;
 
         _isInitialized = true;
-        Log.Info($"[CapyLib] 🔓 Лицензия подтверждена! Запуск всех подсистем CapyLib (Владелец: {LicenseManager.LicenseOwner})...");
 
-        SafeExecute("HarmonyPatches", () =>
-        {
-            _harmony = new HarmonyLib.Harmony($"capylib.patches.{DateTime.UtcNow.Ticks}");
-            _harmony.PatchAll();
-            Log.Info("[CapyLib] Harmony-патчи успешно применены.");
-        });
-
-        SafeExecute("Database", InitializeDatabase);
-        SafeExecute("Placeholders", PlaceholderReplacer.RegisterDefaults);
-        SafeExecute("AudioRegistry", AudioRegistry.RegisterClips);
-        SafeExecute("AssKeybinds", Capy.Engine.ServerSpecific.AssKeybinds.Initialize);
-        SafeExecute("HudModule", Capy.Engine.Hud.HudModule.Enable);
-        SafeExecute("CapyStudio", () =>
-        {
-            Capy.Engine.Studio.Core.SchematicLoader.Initialize();
-            Capy.Engine.Studio.Core.MapManager.Initialize();
-            Capy.Engine.Studio.ToolGun.CapyToolGun.Initialize();
-            Exiled.Events.Handlers.Server.WaitingForPlayers += Capy.Engine.Studio.Core.PrefabManager.Initialize;
-            Exiled.Events.Handlers.Server.RoundStarted += Capy.Engine.Studio.Core.MapManager.OnRoundStarted;
-            Exiled.Events.Handlers.Server.RestartingRound += Capy.Engine.Studio.Core.MapManager.OnRoundRestarted;
-        });
-
-        SafeExecute("ModuleLoader", InitializeModules);
-        SafeExecute("ServerBanner", ServerBanner.Show);
+        // Рефлексивный запуск всех подсистем по приоритету
+        SubsystemRegistry.InitializeAll();
     }
 
     private void OnLicenseRejected()
@@ -124,36 +101,9 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
     {
         _isInitialized = false;
 
-        SafeExecute("HarmonyUnpatch", () =>
-        {
-            _harmony?.UnpatchAll(_harmony.Id);
-            _harmony = null;
-        });
-
-        SafeExecute("CapyStudio.Disable", () =>
-        {
-            Exiled.Events.Handlers.Server.WaitingForPlayers -= Capy.Engine.Studio.Core.PrefabManager.Initialize;
-            Exiled.Events.Handlers.Server.RoundStarted -= Capy.Engine.Studio.Core.MapManager.OnRoundStarted;
-            Exiled.Events.Handlers.Server.RestartingRound -= Capy.Engine.Studio.Core.MapManager.OnRoundRestarted;
-
-            Capy.Engine.Studio.ToolGun.CapyToolGun.Unregister();
-            Capy.Engine.Studio.Core.MapManager.ClearCurrentMap();
-            Capy.Engine.Studio.Core.SchematicLoader.DestroyAll();
-            Capy.Engine.Studio.Core.PrefabManager.Reset();
-        });
-
-        SafeExecute("AssKeybinds.Unregister", Capy.Engine.ServerSpecific.AssKeybinds.Unregister);
-        SafeExecute("HudModule.Disable", Capy.Engine.Hud.HudModule.Disable);
+        // Рефлексивная выгрузка всех подсистем в обратном порядке
+        SubsystemRegistry.ShutdownAll();
         SafeExecute("PlayerStateCleaner", PlayerStateCleaner.Shutdown);
-        SafeExecute("CustomRoles.Disable", CustomRolesManager.UnregisterAll);
-        SafeExecute("CustomItems.Disable", CustomItemsManager.UnregisterAll);
-        SafeExecute("EventHandlers.Disable", EventRegistrar.UnregisterAll);
-        SafeExecute("AudioRegistry.Unload", AudioRegistry.UnloadAll);
-        SafeExecute("EventBus.Clear", EventBus.Clear);
-
-        SafeExecute("ModuleLoader.Shutdown", () => { if (Loader != null) Loader.ShutdownAsync().GetAwaiter().GetResult(); });
-        SafeExecute("ModuleManager.Clear", ModuleManager.Clear);
-        SafeExecute("Database.Shutdown", () => Database?.Shutdown());
     }
 
     private static void SafeExecute(string name, Action action)
@@ -161,31 +111,12 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         try
         {
             action();
-            Log.Debug($"[CapyLib] Подсистема '{name}' выполнена.");
+            Log.Debug($"[CapyLib] Задача '{name}' выполнена.");
         }
         catch (Exception ex)
         {
-            Log.Error($"[CapyLib] Ошибка подсистемы '{name}': {ex}");
+            Log.Error($"[CapyLib] Ошибка задачи '{name}': {ex}");
         }
-    }
-
-    private void InitializeModules()
-    {
-        Loader ??= new ModuleLoader();
-        Loader.InitializeAsync().GetAwaiter().GetResult();
-    }
-
-    private void InitializeDatabase()
-    {
-        if (string.Equals(Config.DatabaseType, "MongoDB", StringComparison.OrdinalIgnoreCase))
-        {
-            Database = new MongoDbProvider(Config.MongoConnectionString, Config.MongoDatabaseName);
-        }
-        else
-        {
-            Database = new LiteDbProvider();
-        }
-        Database.Initialize();
     }
 
     private void EnsureDirectories()
@@ -195,12 +126,14 @@ public sealed class CapyPlugin : Plugin<CapyConfig>
         string modulesDir = Path.Combine(baseDir, "Modules");
         string audioDir = Path.Combine(baseDir, "Audio");
         string dbDir = Path.Combine(baseDir, "Database");
+        string schematicsDir = Path.Combine(baseDir, "Schematics");
 
         if (!Directory.Exists(baseDir)) Directory.CreateDirectory(baseDir);
         if (!Directory.Exists(configsDir)) Directory.CreateDirectory(configsDir);
         if (!Directory.Exists(modulesDir)) Directory.CreateDirectory(modulesDir);
         if (!Directory.Exists(audioDir)) Directory.CreateDirectory(audioDir);
         if (!Directory.Exists(dbDir)) Directory.CreateDirectory(dbDir);
+        if (!Directory.Exists(schematicsDir)) Directory.CreateDirectory(schematicsDir);
     }
 
     private string GetOrCreateLicenseKey()

@@ -30,7 +30,7 @@ public class ModuleLoader
 
             try
             {
-                module.Log.Info($"Активация модуля {module.Name} v{module.Version}...");
+                module.Log.Debug($"Активация модуля {module.Name} v{module.Version}...");
                 await module.OnEnabledAsync();
                 ModuleManager.Register(module);
             }

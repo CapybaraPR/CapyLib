@@ -89,7 +89,7 @@ public static class SchematicLoader
             Log.Error($"[CapyStudio] Ошибка при создании папки схематик: {ex}");
         }
 
-        Log.Info($"[CapyStudio] Движок схематик инициализирован. Путь: {PrimarySchematicsPath}");
+        Log.Debug($"[CapyStudio] Движок схематик инициализирован. Путь: {PrimarySchematicsPath}");
     }
 
     public static List<string> GetAvailableSchematics()
@@ -234,18 +234,64 @@ public static class SchematicLoader
 
         try
         {
+            // Precompute hierarchical transforms for all nested blocks
+            var blockById = new Dictionary<int, BlockData>();
+            foreach (var b in data.Blocks)
+                blockById[b.ObjectId] = b;
+
+            var resolvedPos = new Dictionary<int, Vector3>();
+            var resolvedRot = new Dictionary<int, Quaternion>();
+            var resolvedScale = new Dictionary<int, Vector3>();
+
+            void ResolveTransform(BlockData b)
+            {
+                if (resolvedPos.ContainsKey(b.ObjectId)) return;
+
+                if (b.ParentId != data.RootObjectId && b.ParentId != 0 && blockById.TryGetValue(b.ParentId, out var parentBlock))
+                {
+                    ResolveTransform(parentBlock);
+
+                    Vector3 pPos = resolvedPos[parentBlock.ObjectId];
+                    Quaternion pRot = resolvedRot[parentBlock.ObjectId];
+                    Vector3 pScale = resolvedScale[parentBlock.ObjectId];
+
+                    Vector3 bLocalPos = b.Position.ToUnityVector3();
+                    Quaternion bLocalRot = b.Rotation.ToUnityQuaternion();
+                    Vector3 bLocalScale = b.Scale.ToUnityVector3();
+
+                    resolvedPos[b.ObjectId] = pPos + (pRot * Vector3.Scale(bLocalPos, pScale));
+                    resolvedRot[b.ObjectId] = pRot * bLocalRot;
+                    resolvedScale[b.ObjectId] = Vector3.Scale(pScale, bLocalScale);
+                }
+                else
+                {
+                    resolvedPos[b.ObjectId] = b.Position.ToUnityVector3();
+                    resolvedRot[b.ObjectId] = b.Rotation.ToUnityQuaternion();
+                    resolvedScale[b.ObjectId] = b.Scale.ToUnityVector3();
+                }
+            }
+
+            foreach (var b in data.Blocks)
+                ResolveTransform(b);
+
             foreach (var block in data.Blocks)
             {
-                Vector3 localPos = block.Position.ToUnityVector3();
+                Vector3 localPos = resolvedPos[block.ObjectId];
                 Vector3 scaledLocalPos = Vector3.Scale(localPos, rootScale);
                 Vector3 worldPos = position + (rootRot * scaledLocalPos);
 
-                Quaternion localRot = block.Rotation.ToUnityQuaternion();
+                Quaternion localRot = resolvedRot[block.ObjectId];
                 Quaternion worldRot = rootRot * localRot;
 
-                Vector3 worldScale = Vector3.Scale(block.Scale.ToUnityVector3(), rootScale);
+                Vector3 worldScale = Vector3.Scale(resolvedScale[block.ObjectId], rootScale);
 
-                switch ((BlockType)block.BlockType)
+                var effectiveBlockType = (BlockType)block.BlockType;
+                if (effectiveBlockType == BlockType.ShootingTarget && (block.Properties.ContainsKey("Text") || block.Name.StartsWith("Text", StringComparison.OrdinalIgnoreCase)))
+                {
+                    effectiveBlockType = BlockType.Text;
+                }
+
+                switch (effectiveBlockType)
                 {
                     case BlockType.Primitive:
                     {
@@ -348,10 +394,19 @@ public static class SchematicLoader
                             rotation: worldRot,
                             scale: worldScale,
                             text: block.GetTextContent(),
-                            spawn: true
+                            spawn: false
                         );
-                        if (textToy?.Base != null)
-                            schemObj.AddGameObject(block, textToy.Base.gameObject);
+                        if (textToy != null)
+                        {
+                            try
+                            {
+                                textToy.DisplaySize = block.GetDisplaySize();
+                            }
+                            catch { }
+                            textToy.Spawn();
+                            if (textToy.Base != null)
+                                schemObj.AddGameObject(block, textToy.Base.gameObject);
+                        }
                         break;
                     }
 

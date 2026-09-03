@@ -43,7 +43,7 @@ public static class AudioRegistry
             }
         }
 
-        Log.Info($"[CapyLib:Audio] Загружено аудиоклипов: {LoadedClipNames.Count}");
+        Log.Debug($"[CapyLib:Audio] Загружено аудиоклипов: {LoadedClipNames.Count}");
     }
 
     public static void UnloadAll()

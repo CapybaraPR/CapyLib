@@ -53,7 +53,7 @@ public sealed class StaffService : IDisposable
                 _collection.EnsureIndex(x => x.Id, true);
                 _collection.EnsureIndex(x => x.DiscordUserId, false);
                 _collection.EnsureIndex(x => x.IsActive, false);
-                Log.Info($"[StaffService] База данных персонала успешно инициализирована (CapyData.db): {_dbPath}");
+                Log.Debug($"[StaffService] База данных персонала успешно инициализирована (CapyData.db): {_dbPath}");
             }
             catch (Exception ex)
             {

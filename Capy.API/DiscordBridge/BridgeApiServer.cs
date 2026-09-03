@@ -93,7 +93,7 @@ public sealed class BridgeApiServer : IDisposable
             _dispatcher.Start();
             _statusRefreshHandle = Timing.RunCoroutine(StatusSnapshotLoop());
             _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
-            Log.Info($"[DiscordBridge.ApiServer] API успешно слушает {normalizedPrefix} (SSH подпись: {(_config.RequireSshSignature ? "включена" : "отключена")}, Creator-уровень: {(_config.AllowCreatorAccess ? "разрешён" : "выключен")})");
+            Log.Debug($"[DiscordBridge.ApiServer] API успешно слушает {normalizedPrefix} (SSH подпись: {(_config.RequireSshSignature ? "включена" : "отключена")}, Creator-уровень: {(_config.AllowCreatorAccess ? "разрешён" : "выключен")})");
         }
         catch (Exception ex)
         {

@@ -1,4 +1,4 @@
-﻿using Capy.Core.Database.Models;
+using Capy.Core.Database.Models;
 using LiteDB;
 
 namespace Capy.Core.Database;
@@ -34,7 +34,7 @@ public class LiteDbProvider : IDatabaseProvider
             _players.EnsureIndex(x => x.TotalPlaytimeSeconds);
             _players.EnsureIndex(x => x.RoundsPlayed);
             _players.EnsureIndex(x => x.Xp);
-            Log.Info($"[LiteDbProvider] База данных LiteDB успешно инициализирована (Shared mode): {_dbPath}");
+            Log.Debug($"[LiteDbProvider] База данных LiteDB успешно инициализирована (Shared mode): {_dbPath}");
         }
         catch (Exception ex)
         {
