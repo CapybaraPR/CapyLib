@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Exiled.Events.EventArgs.Player;
@@ -81,6 +81,12 @@ public static class HudModule
                 Huds.Remove(ev.Player);
             }
             SpectatedTargets.Remove(ev.Player);
+
+            var spectators = SpectatedTargets.Where(kvp => kvp.Value == ev.Player).Select(kvp => kvp.Key).ToList();
+            foreach (var spectator in spectators)
+            {
+                SpectatedTargets.Remove(spectator);
+            }
         }
     }
 
